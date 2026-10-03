@@ -1,4 +1,4 @@
-.PHONY: install build test lint format
+.PHONY: install build build-extension test lint format
 
 install:
 	pnpm install
@@ -6,8 +6,11 @@ install:
 build:
 	pnpm -r --if-present build
 
+build-extension:
+	pnpm --filter ./apps/extension build
+
 lint:
-	pnpm --filter ./apps/extension lint
+	pnpm -r --if-present lint
 
 format:
-	pnpm --filter ./apps/extension lint:fix
+	pnpm -r --if-present lint:fix
