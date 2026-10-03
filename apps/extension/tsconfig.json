@@ -16,7 +16,8 @@
   
       "skipLibCheck": true,
   
-      "types": ["chrome"]
+      "types": ["chrome"],
+      "noEmit": true
     },
   
     "include": [
