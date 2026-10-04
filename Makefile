@@ -9,6 +9,10 @@ build:
 build-extension:
 	pnpm --filter ./apps/extension build
 
+test:
+	pnpm --filter ./apps/extension build
+	pnpm --filter ./apps/extension test
+
 lint:
 	pnpm -r --if-present lint
 
