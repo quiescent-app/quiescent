@@ -1,6 +1,6 @@
 function App() {
   const handleOpenQuiescent = () => {
-    window.open("http://localhost:3000", "_blank");
+    window.open("http://localhost:5173", "_blank");
   };
 
   return (

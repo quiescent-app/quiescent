@@ -1,6 +1,6 @@
-#Chrome Extension
+# Chrome Extension
 
-This folder contains the Chrome extension client for the  project.
+This folder contains the Chrome extension client for the project.
 
 ## Tech stack
 
@@ -33,3 +33,4 @@ apps/extension/
 ├── tsconfig.json
 ├── vite.config.ts
 └── README.md
+```
