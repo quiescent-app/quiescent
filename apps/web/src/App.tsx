@@ -1,9 +1,5 @@
 function App() {
-  return (
-    <>
-      <div>Welcome to Quiescent</div>
-    </>
-  );
+  return <h1>Quiescent</h1>;
 }
 
 export default App;
