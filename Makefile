@@ -3,10 +3,10 @@
 install:
 	pnpm install
 
-build:
-	pnpm -r --if-present build
-
 build: build-extension build-web
+
+build-extension:
+	pnpm --filter ./apps/extension build
 
 build-web:
 	pnpm --filter ./apps/web build
