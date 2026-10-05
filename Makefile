@@ -6,8 +6,7 @@ install:
 build:
 	pnpm -r --if-present build
 
-build-extension:
-	pnpm --filter ./apps/extension build
+build: build-extension build-web
 
 build-web:
 	pnpm --filter ./apps/web build
