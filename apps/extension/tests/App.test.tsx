@@ -1,10 +1,11 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import App from "../src/popup/App";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
 });
 
 describe("App", () => {
@@ -19,13 +20,17 @@ describe("App", () => {
     expect(heading).toBeDefined();
   });
 
-  it("renders the Quiescent redirect button", () => {
+  it("opens the Quiescent web app in a new tab when the button is clicked", () => {
+    const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
     render(<App />);
 
     const button = screen.getByRole("button", {
       name: "Click to go to Quiescent",
     });
 
-    expect(button).toBeDefined();
+    fireEvent.click(button);
+
+    expect(openSpy).toHaveBeenCalledWith("http://localhost:5173", "_blank");
   });
 });
