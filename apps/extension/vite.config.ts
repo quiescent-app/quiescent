@@ -1,19 +1,22 @@
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: "jsdom",
+  },
 
   build: {
     rollupOptions: {
       input: {
         popup: fileURLToPath(new URL("./popup.html", import.meta.url)),
         background: fileURLToPath(
-          new URL("./src/background/index.ts", import.meta.url)
+          new URL("./src/background/index.ts", import.meta.url),
         ),
         content: fileURLToPath(
-          new URL("./src/content/index.ts", import.meta.url)
+          new URL("./src/content/index.ts", import.meta.url),
         ),
       },
 
@@ -35,4 +38,4 @@ export default defineConfig({
       },
     },
   },
-}); 
+});
