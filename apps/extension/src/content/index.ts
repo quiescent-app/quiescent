@@ -59,6 +59,7 @@ const startTracking = () => {
     window.addEventListener("scroll", scheduleProgressReport, { passive: true });
     window.addEventListener("resize", scheduleProgressReport);
     resizeObserver.observe(document.documentElement);
+    resizeObserver.observe(document.body);
   }
 
   const progress = getCurrentProgress();
