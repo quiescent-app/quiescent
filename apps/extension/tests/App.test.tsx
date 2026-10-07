@@ -85,12 +85,36 @@ describe("App", () => {
 
     runtimeListeners.forEach((listener) =>
       listener(
-        { type: "READING_PROGRESS_UPDATE", progress: 57 },
+        {
+          type: "READING_PROGRESS_UPDATE",
+          progress: 57,
+          url: "https://example.com/article",
+        },
         { tab: { id: 7 } },
       ),
     );
 
     expect(await screen.findByText("57%")).toBeDefined();
+  });
+
+  it("ignores progress updates from an earlier page in the same tab", async () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Reading progress" }));
+    expect(await screen.findByText("42%")).toBeDefined();
+
+    runtimeListeners.forEach((listener) =>
+      listener(
+        {
+          type: "READING_PROGRESS_UPDATE",
+          progress: 90,
+          url: "https://example.com/previous-article",
+        },
+        { tab: { id: 7 } },
+      ),
+    );
+
+    expect(screen.getByText("42%")).toBeDefined();
+    expect(screen.queryByText("90%")).toBeNull();
   });
 
   it("shows a clear fallback on unsupported pages", async () => {
