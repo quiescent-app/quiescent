@@ -20,6 +20,7 @@ function App() {
     status: "idle",
   });
   const trackedTabId = useRef<number | null>(null);
+  const trackedPageUrl = useRef<string | null>(null);
 
   const handleOpenWeb = () => {
     window.open("http://localhost:5173", "_blank");
@@ -33,11 +34,13 @@ function App() {
 
       if (tab?.id === undefined || !tab.url?.match(/^(https?|file):/)) {
         trackedTabId.current = null;
+        trackedPageUrl.current = null;
         setProgressState({ status: "unavailable", message: unavailableMessage });
         return;
       }
 
       trackedTabId.current = tab.id;
+      trackedPageUrl.current = tab.url;
       const response = (await chrome.tabs.sendMessage(tab.id, {
         type: "START_READING_PROGRESS",
       })) as ReadingProgressResponse | undefined;
@@ -52,6 +55,7 @@ function App() {
       });
     } catch {
       trackedTabId.current = null;
+      trackedPageUrl.current = null;
       setProgressState({ status: "unavailable", message: unavailableMessage });
     }
   }, []);
@@ -64,6 +68,7 @@ function App() {
       if (
         message.type === "READING_PROGRESS_UPDATE" &&
         sender.tab?.id === trackedTabId.current &&
+        message.url === trackedPageUrl.current &&
         Number.isFinite(message.progress)
       ) {
         setProgressState({
@@ -81,13 +86,22 @@ function App() {
 
     const handleTabUpdated = (
       tabId: number,
-      changeInfo: { status?: string },
+      changeInfo: { status?: string; url?: string },
     ) => {
-      if (tabId === trackedTabId.current && changeInfo.status === "complete") {
+      if (tabId !== trackedTabId.current) {
+        return;
+      }
+
+      if (changeInfo.url) {
+        trackedPageUrl.current = changeInfo.url;
+        setProgressState({ status: "loading" });
+      }
+
+      if (changeInfo.status === "complete") {
         void startReadingProgress();
       }
     };
-``
+
     chrome.runtime.onMessage.addListener(handleProgressUpdate);
     chrome.tabs.onActivated.addListener(handleActiveTabChanged);
     chrome.tabs.onUpdated.addListener(handleTabUpdated);
