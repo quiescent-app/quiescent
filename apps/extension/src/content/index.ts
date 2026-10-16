@@ -1,8 +1,17 @@
-console.log("Readify content script loaded");
+import type { StartReadingProgressRequest } from "../types/readingProgress";
+import { startReadingProgressTracking } from "./readingProgress";
 
-const pageData = {
-  title: document.title,
-  url: window.location.href,
-};
 
-console.log("Readify page data:", pageData);
+
+chrome.runtime.onMessage.addListener(
+  (message: StartReadingProgressRequest, _sender, sendResponse) => {
+    if (message.type !== "START_READING_PROGRESS") {
+      return;
+    }
+
+    const progress = startReadingProgressTracking();
+    sendResponse({ ok: true, progress });
+  },
+);
+
+console.debug("[Quiescent] Reading progress content script ready");

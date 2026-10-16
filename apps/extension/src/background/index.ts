@@ -1,3 +1,3 @@
 chrome.runtime.onInstalled.addListener(() => {
-    console.log("Readify installed");
+    console.log("Quiescent installed");
   });
