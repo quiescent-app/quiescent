@@ -40,7 +40,7 @@ run_test "Valid CI/CD" pass \
 
 run_test "Valid documentation" pass \
     "docs/duc/update-readme" \
-    "docs/duc: improve-documentation"
+    "docs/duc: improve documentation"
 
 # Invalid branch cases
 run_test "Missing category" fail \
@@ -78,7 +78,7 @@ run_test "Missing PR description" fail \
 
 run_test "Invalid PR description" fail \
     "feat/tien/login-page" \
-    "feat/tien: Login Page"
+    "feat/tien: Login_Page"
 
 # Mismatch cases
 run_test "Category mismatch" fail \
