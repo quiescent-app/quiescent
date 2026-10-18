@@ -1,0 +1,31 @@
+name: PR Naming Validation
+
+on:
+  pull_request:
+    branches: ["main"]
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  validate-pr:
+    name: Validate PR Naming
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Run validation tests
+        run: bash .github/scripts/test-validate-pr.sh
+
+      - name: Validate branch and PR title
+        env:
+          BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          bash .github/scripts/validate-pr.sh \
+            "$BRANCH_NAME" \
+            "$PR_TITLE"
