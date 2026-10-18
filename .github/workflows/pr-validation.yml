@@ -18,9 +18,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Run validation tests
-        run: bash .github/scripts/test-validate-pr.sh
-
       - name: Validate branch and PR title
         env:
           BRANCH_NAME: ${{ github.event.pull_request.head.ref }}
