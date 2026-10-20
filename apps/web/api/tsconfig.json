@@ -11,5 +11,14 @@
     "skipLibCheck": true,
     "types": ["node", "vitest/globals"]
   },
-  "include": ["src", "tests", "drizzle.config.ts", "eslint.config.js"]
+  "include": [
+    "model",
+    "service",
+    "controller",
+    "routes",
+    "test",
+    "drizzle.config.ts",
+    "eslint.config.js"
+  ],
+  "exclude": ["ui", "drizzle", "node_modules"]
 }

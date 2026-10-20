@@ -1,7 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { createTestDatabase } from "./helpers/database.js";
+import { createTestDatabase } from "./database.js";
 
 describe("database migration", () => {
   let client: PGlite;

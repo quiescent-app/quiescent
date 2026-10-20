@@ -12,11 +12,11 @@ The API uses Drizzle ORM with a Neon PostgreSQL database. Create the local
 environment file from the committed example:
 
 ```bash
-cp apps/api/.env.example apps/api/.env
+cp apps/web/api/.env.example apps/web/api/.env
 ```
 
 Then replace the
-example `DATABASE_URL` in `apps/api/.env` with the Neon connection string.
+example `DATABASE_URL` in `apps/web/api/.env` with the Neon connection string.
 Apply the committed migrations:
 
 ```bash

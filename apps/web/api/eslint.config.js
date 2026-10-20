@@ -5,6 +5,6 @@ export default tseslint.config(
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    ignores: ["coverage/", "dist/", "drizzle/"],
+    ignores: ["coverage/", "dist/", "**/drizzle/**", "ui/", "node_modules/"],
   },
 );

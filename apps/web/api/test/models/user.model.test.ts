@@ -1,16 +1,14 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { Database } from "../src/db/client.js";
-import * as schema from "../src/db/schema.js";
-import { UserModel } from "../src/model/user.model.js";
-import { createTestDatabase } from "./helpers/database.js";
+import type { Database } from "../../model/db/client.js";
+import { UserModel } from "../../model/user.model.js";
+import { createTestDatabase } from "../database/database.js";
 
 describe("UserModel", () => {
   let client: PGlite;
-  let database: PgliteDatabase<typeof schema>;
+  let database: Awaited<ReturnType<typeof createTestDatabase>>["database"];
   let model: UserModel;
 
   beforeEach(async () => {

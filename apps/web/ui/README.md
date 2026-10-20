@@ -1,6 +1,6 @@
 # Web
 
-This folder contains the web client for the project.
+This folder contains the web client UI for the project.
 
 ## Tech stack
 
@@ -12,7 +12,7 @@ This folder contains the web client for the project.
 ## Project structure
 
 ```text
-apps/web/
+apps/web/ui/
 ├── public/
 │
 ├── src/

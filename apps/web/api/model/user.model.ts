@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
 
-import type { Database } from "../db/client.js";
-import { users } from "../db/schema.js";
-import type { CreateUserInput, UserRecord } from "../types/user.js";
+import type { Database } from "./db/client.js";
+import { users, UserRecord} from "./schema/user.schema.js";
 
 export class UserModel {
   constructor(private readonly database: Database) {}
 
-  async create(input: CreateUserInput): Promise<UserRecord> {
+  async create(input: {email: string, password: string}): Promise<UserRecord> {
     const [user] = await this.database
       .insert(users)
       .values({ email: input.email, password: input.password })

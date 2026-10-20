@@ -16,5 +16,22 @@ export function getDatabaseUrl(
     );
   }
 
+  let parsedUrl: URL;
+
+  try {
+    parsedUrl = new URL(db_url);
+  } catch {
+    throw new DatabaseConfigurationError("DATABASE_URL must be a valid PostgreSQL URL");
+  }
+
+  if (
+    !["postgres:", "postgresql:"].includes(parsedUrl.protocol) ||
+    !parsedUrl.hostname ||
+    !parsedUrl.pathname ||
+    parsedUrl.pathname === "/"
+  ) {
+    throw new DatabaseConfigurationError("DATABASE_URL must be a valid PostgreSQL URL");
+  }
+
   return db_url;
 }
