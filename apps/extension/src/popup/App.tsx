@@ -26,16 +26,53 @@ function App() {
     window.open("http://localhost:5173", "_blank");
   };
 
+  const handleSaveLink = async () => {
+    try {
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
+
+      if (!tab?.url) {
+        console.error("Unable to retrieve the current page URL.");
+        return;
+      }
+
+      const url = new URL(tab.url);
+
+      if (!["http:", "https:"].includes(url.protocol)) {
+        console.error("This page cannot be saved.");
+        return;
+      }
+
+      const savedRecord = {
+        timeSaved: new Date().toISOString(),
+        url: url.href,
+        domain: url.hostname,
+      };
+
+      console.log(savedRecord);
+    } catch (error) {
+      console.error("Failed to save link:", error);
+    }
+  };
+
   const startReadingProgress = useCallback(async () => {
     setProgressState({ status: "loading" });
 
     try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({
+        active: true,
+        currentWindow: true,
+      });
 
       if (tab?.id === undefined || !tab.url?.match(/^(https?|file):/)) {
         trackedTabId.current = null;
         trackedPageUrl.current = null;
-        setProgressState({ status: "unavailable", message: unavailableMessage });
+        setProgressState({
+          status: "unavailable",
+          message: unavailableMessage,
+        });
         return;
       }
 
@@ -127,6 +164,16 @@ function App() {
           Open app
         </button>
       </header>
+
+      <section className="save-section">
+        <button
+          className="save-button"
+          onClick={() => void handleSaveLink()}
+          type="button"
+        >
+          Save this link
+        </button>
+      </section>
 
       <section className="progress-section" aria-live="polite">
         <button
