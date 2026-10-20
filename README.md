@@ -51,4 +51,5 @@ make db-migrate
 ```
 
 API database tests apply the committed migrations to a fresh, embedded PGlite
-database, so `make test` does not require Neon credentials.
+database, so `make test` does not require Neon credentials. The live Neon
+health query runs only when `DATABASE_URL` is configured.
