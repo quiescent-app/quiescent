@@ -32,10 +32,14 @@ describe("getDatabaseUrl", () => {
 });
 
 describe("Neon database health", () => {
-  it("connects to the configured database and runs a health query", async () => {
-    const sql = neon(getDatabaseUrl());
-    const result = await sql`select 1 as healthy`;
+  it.skipIf(!process.env.DATABASE_URL)(
+    "connects to the configured database and runs a health query",
+    async () => {
+      const sql = neon(getDatabaseUrl());
+      const result = await sql`select 1 as healthy`;
 
-    expect(result).toEqual([{ healthy: 1 }]);
-  }, 15_000);
+      expect(result).toEqual([{ healthy: 1 }]);
+    },
+    15_000,
+  );
 });
