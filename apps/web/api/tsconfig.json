@@ -19,6 +19,6 @@
     "test",
     "drizzle.config.ts",
     "eslint.config.js"
-  ],
+, "schema", "db"  ],
   "exclude": ["ui", "drizzle", "node_modules"]
 }

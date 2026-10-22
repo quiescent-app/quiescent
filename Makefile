@@ -28,8 +28,13 @@ test-web:
 	pnpm --filter ./apps/web/ui test
 
 db-generate:
-	@test -n "$(NAME)" || (echo "Usage: make db-generate NAME=create-users" && exit 1)
+ifeq ($(strip $(NAME)),)
+	@echo Usage: make db-generate NAME=create-users
+	@exit 1
+
+else
 	pnpm --filter ./apps/web/api db:generate "$(NAME)"
+endif
 
 db-migrate:
 	pnpm --filter ./apps/web/api db:migrate

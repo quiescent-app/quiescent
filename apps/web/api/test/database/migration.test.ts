@@ -7,7 +7,7 @@ describe("database migration", () => {
   let client: PGlite;
 
   afterEach(async () => {
-    await client.close();
+    if (client) await client.close();
   });
 
   it("creates the users table from an empty database", async () => {
