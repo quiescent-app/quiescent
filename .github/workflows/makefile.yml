@@ -44,6 +44,7 @@ jobs:
         if: failure() && github.event_name == 'push'
         uses: slackapi/slack-github-action@v4.0.0
         with: 
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
@@ -78,5 +79,3 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
