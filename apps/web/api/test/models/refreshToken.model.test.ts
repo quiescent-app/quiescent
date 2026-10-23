@@ -86,6 +86,52 @@ describe("RefreshTokenModel", () => {
     ).resolves.toBeNull();
   });
 
+  it("does not rotate an expired token", async () => {
+    const user = await users.create({
+      email: "reader@example.com",
+      password: "hashed-password",
+    });
+    await model.create({
+      userId: user.id,
+      familyId: "00000000-0000-4000-8000-000000000013",
+      tokenHash: "expired-token-hash",
+      expiresAt: new Date(Date.now() - 60_000),
+    });
+
+    await expect(
+      model.rotate(
+        "expired-token-hash",
+        "replacement-token-hash",
+        new Date(Date.now() + 60_000),
+      ),
+    ).resolves.toBeNull();
+    await expect(model.findByHash("replacement-token-hash")).resolves.toBeNull();
+  });
+
+  it("does not rotate a token that was already revoked", async () => {
+    const user = await users.create({
+      email: "reader@example.com",
+      password: "hashed-password",
+    });
+    const familyId = "00000000-0000-4000-8000-000000000014";
+    await model.create({
+      userId: user.id,
+      familyId,
+      tokenHash: "revoked-token-hash",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await model.revokeFamily(familyId);
+
+    await expect(
+      model.rotate(
+        "revoked-token-hash",
+        "replacement-token-hash",
+        new Date(Date.now() + 60_000),
+      ),
+    ).resolves.toBeNull();
+    await expect(model.findByHash("replacement-token-hash")).resolves.toBeNull();
+  });
+
   it("revokes all active tokens in a family", async () => {
     const user = await users.create({
       email: "reader@example.com",
@@ -109,5 +155,35 @@ describe("RefreshTokenModel", () => {
         revokedAt: expect.any(Date),
       });
     }
+  });
+
+  it("does not revoke tokens that belong to another family", async () => {
+    const user = await users.create({
+      email: "reader@example.com",
+      password: "hashed-password",
+    });
+    const activeFamilyId = "00000000-0000-4000-8000-000000000015";
+    const otherFamilyId = "00000000-0000-4000-8000-000000000016";
+    await model.create({
+      userId: user.id,
+      familyId: activeFamilyId,
+      tokenHash: "active-family-token-hash",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+    await model.create({
+      userId: user.id,
+      familyId: otherFamilyId,
+      tokenHash: "other-family-token-hash",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    await model.revokeFamily(activeFamilyId);
+
+    await expect(model.findByHash("active-family-token-hash")).resolves.toMatchObject({
+      revokedAt: expect.any(Date),
+    });
+    await expect(model.findByHash("other-family-token-hash")).resolves.toMatchObject({
+      revokedAt: null,
+    });
   });
 });
