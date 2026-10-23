@@ -41,20 +41,19 @@ jobs:
         run: make build
       
       - name: Send Slack Notification
-        if: failure() && github.event_name == 'push'
+        if: github.event_name == 'push'
         uses: slackapi/slack-github-action@v4.0.0
         with: 
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
           payload: |
             {
-              "channel": "${{ secrets.SLACK_CHANNEL_ID }}",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "Workflow Status: ${{ job.status }}"
+                    "text": "CI Workflow Result: ${{ job.status }}"
                   }
                 },
                 {
