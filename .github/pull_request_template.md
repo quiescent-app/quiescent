@@ -1,3 +1,20 @@
+**PR Naming Convention**
+
+Before submitting this PR, ensure that:
+
+- [ ] Branch name follows `category/developer/short-description`.
+- [ ] PR title follows `category/developer: short-description`.
+- [ ] Category and developer match between the branch and PR title.
+
+Example:
+
+- Branch: `feat/kevin/github-makefile-init`
+- PR title: `feat/kevin: github-makefile-init`
+
+See [Branch and PR Naming Guidelines](https://github.com/quiescent-app/quiescent/tree/main/docs/BRANCH_AND_PR_NAMING.md) for approved categories and detailed naming rules.
+
+---
+
 ## Summary
 
 Briefly describe what this PR changes.
@@ -53,3 +70,4 @@ Example:
 ```bash
 make install
 make build
+```
