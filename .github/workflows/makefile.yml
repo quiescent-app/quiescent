@@ -44,37 +44,24 @@ jobs:
         if: github.event_name == 'push'
         uses: slackapi/slack-github-action@v4.0.0
         with: 
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            {
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "CI Workflow Result: ${{ job.status }}"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Repository:*\n${{ github.repository }}\n\n*Triggered by:*\n${{ github.actor }}"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Run Log"
-                      },
-                      "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: "CI Workflow Result: ${{ job.status }}"
+            blocks:
+            - type: "header"
+              text:
+                type: "plain_text"
+                text: "CI Workflow Result: ${{ job.status }}"
+            - type: "section"
+              text:
+                type: "mrkdwn"
+                text: "*Repository:*\n${{ github.repository }}\n\n*Triggered by:*\n${{ github.actor }}"
+            - type: "actions"
+              elements:
+              - type: "button"
+                text:
+                  type: "plain_text"
+                  text: "View Run Log"
+                url: "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
