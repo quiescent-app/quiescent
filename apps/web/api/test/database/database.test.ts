@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   DatabaseConfigurationError,
   getDatabaseUrl,
-} from "../../model/db/config.js";
+} from "../../db/config.js";
 
 describe("getDatabaseUrl", () => {
   it("returns a valid PostgreSQL URL", () => {
