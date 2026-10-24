@@ -17,4 +17,6 @@ export const users = pgTable(
   (table) => [uniqueIndex("users_email_unique").on(table.email)],
 );
 
-export type UserRecord = typeof users.$inferSelect;
+export type User = typeof users.$inferSelect;
+
+export type AuthUser = Pick<User, "id" | "email" | "createdAt" | "updatedAt">;

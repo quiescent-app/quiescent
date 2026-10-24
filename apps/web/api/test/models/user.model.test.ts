@@ -2,7 +2,7 @@ import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { Database } from "../../model/db/client.js";
+import type { Database } from "../../db/client.js";
 import { UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
 
@@ -17,7 +17,7 @@ describe("UserModel", () => {
   });
 
   afterEach(async () => {
-    await client.close();
+    if (client) await client.close();
   });
 
   it("creates and returns a user with database-generated fields", async () => {
@@ -30,7 +30,7 @@ describe("UserModel", () => {
 
     expect(user.id).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
-    );
+    ); // UUID
     expect(user.email).toBe("reader@example.com");
     expect(user.password).toBe("$hash$already-created-by-service");
     expect(user.createdAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
