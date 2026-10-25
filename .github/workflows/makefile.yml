@@ -43,51 +43,39 @@ jobs:
         run: make build
       
       - name: Send Slack Notification
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
+        if: ${{ always() && github.event_name == 'pull_request' }}
         uses: slackapi/slack-github-action@v4.0.0
         with: 
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
           payload: |
-            {
-              "channel": "${{ secrets.SLACK_CHANNEL_ID }}",
-              "text": "CI Workflow Result: ${{ job.status }}",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "PR number: #${{ github.event.pull_request.number}}, title: ${{ github.event.pull_request.title }}",
-                    "text": "CI Workflow Result: ${{ job.status }}",
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Repository:*\n${{ github.repository }}\n\n*Triggered by:*\n${{ github.actor }}"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Pull Request"
-                      },
-                      "url": "${{ github.event.pull_request.html_url }}"
-                    }
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Run Log"
-                      },
-                      "url": "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: "CI Workflow Result: ${{ job.status }}"
+            blocks:
+              - type: header
+                text:
+                  type: plain_text
+                  text: "CI Workflow Result: ${{ job.status }}"
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: |
+                    *PR:* #${{ github.event.pull_request.number }} - ${{ github.event.pull_request.title }}
+
+                    *Repository:*
+                    ${{ github.repository }}
+
+                    *Triggered by:*
+                    ${{ github.actor }}
+              - type: actions
+                elements:
+                  - type: button
+                    text:
+                      type: plain_text
+                      text: View Pull Request
+                    url: ${{ github.event.pull_request.html_url }}
+                  - type: button
+                    text:
+                      type: plain_text
+                      text: View Run Log
+                    url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
