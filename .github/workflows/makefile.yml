@@ -57,7 +57,8 @@ jobs:
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "CI Workflow Result: ${{ job.status }}"
+                    "text": "PR number: #${{ github.event.pull_request.number}}, title: ${{ github.event.pull_request.title }}",
+                    "text": "CI Workflow Result: ${{ job.status }}",
                   }
                 },
                 {
@@ -70,6 +71,14 @@ jobs:
                 {
                   "type": "actions",
                   "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Pull Request"
+                      },
+                      "url": "${{ github.event.pull_request.html_url }}"
+                    }
                     {
                       "type": "button",
                       "text": {
