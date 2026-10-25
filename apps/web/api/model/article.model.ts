@@ -68,15 +68,6 @@ export class ArticleModel {
     input: UpdateArticleInput,
   ): Promise<ArticleRecord | null> {
     const { readingProgress } = input;
-
-    if (
-      !Number.isInteger(readingProgress) ||
-      readingProgress < 0 ||
-      readingProgress > 100
-    ) {
-      throw new Error("Reading progress must be an integer between 0 and 100");
-    }
-
     const now = new Date();
 
     const [article] = await this.database
@@ -91,5 +82,14 @@ export class ArticleModel {
       .returning();
 
     return article ?? null;
+  }
+
+  async delete(id: string, userId: string): Promise<boolean> {
+    const deleted = await this.database
+      .delete(articles)
+      .where(and(eq(articles.id, id), eq(articles.userId, userId)))
+      .returning({ id: articles.id });
+
+    return deleted.length > 0;
   }
 }

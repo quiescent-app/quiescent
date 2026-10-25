@@ -52,6 +52,19 @@ export class ArticleService {
   }
 
   async updateArticle(id: string, userId: string, input: UpdateArticleInput) {
+    const { readingProgress } = input;
+
+    if (
+      !Number.isInteger(readingProgress) ||
+      readingProgress < 0 ||
+      readingProgress > 100
+    ) {
+      throw new Error("Reading progress must be an integer between 0 and 100");
+    }
     return this.articleModel.update(id, userId, input);
+  }
+
+  async deleteArticle(id: string, userId: string): Promise<boolean> {
+    return this.articleModel.delete(id, userId);
   }
 }

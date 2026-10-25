@@ -73,7 +73,7 @@ describe("ArticleService", () => {
     expect(model.create).not.toHaveBeenCalled();
   });
 
-  it("rejects duplicate articles", async () => {
+  it("rejects creating duplicate articles with the same URL", async () => {
     model.findByUrl.mockResolvedValue(article);
 
     await expect(
