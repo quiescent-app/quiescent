@@ -40,7 +40,9 @@ jobs:
         run: make test
 
       - name: Build
-        run: make build
+        run: |
+          make build
+          exit 1
       
       - name: Send Slack Notification
         if: ${{ always() && github.event_name == 'pull_request' }}
