@@ -60,11 +60,12 @@ export const articles = pgTable(
   (table) => [
     uniqueIndex("articles_user_url_unique").on(table.userId, table.url),
 
-    index("articles_user_id_idx").on(table.userId),
-
     index("articles_domain_idx").on(table.domain),
 
-    index("articles_last_accessed_idx").on(table.lastAccessedAt),
+    index("articles_user_last_accessed_idx").on(
+      table.userId,
+      table.lastAccessedAt,
+    ),
 
     check(
       "articles_reading_progress_check",

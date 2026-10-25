@@ -42,11 +42,11 @@ export class ArticleModel {
       .orderBy(desc(articles.lastAccessedAt));
   }
 
-  async findById(id: string, userId: string): Promise<ArticleRecord | null> {
+  async findById(id: string): Promise<ArticleRecord | null> {
     const [article] = await this.database
       .select()
       .from(articles)
-      .where(and(eq(articles.id, id), eq(articles.userId, userId)))
+      .where(eq(articles.id, id))
       .limit(1);
 
     return article ?? null;

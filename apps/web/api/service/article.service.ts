@@ -42,7 +42,13 @@ export class ArticleService {
   }
 
   async getArticleById(id: string, userId: string) {
-    return this.articleModel.findById(id, userId);
+    const article = await this.articleModel.findById(id);
+
+    if (!article || article.userId !== userId) {
+      return null;
+    }
+
+    return article;
   }
 
   async getArticleByUrl(url: string, userId: string) {

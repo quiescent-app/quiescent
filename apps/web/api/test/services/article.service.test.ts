@@ -102,9 +102,30 @@ describe("ArticleService", () => {
 
     const result = await service.getArticleById(article.id, userId);
 
-    expect(model.findById).toHaveBeenCalledWith(article.id, userId);
+    expect(model.findById).toHaveBeenCalledWith(article.id);
 
     expect(result).toEqual(article);
+  });
+
+  it("prevents accessing another user's article by ID", async () => {
+    model.findById.mockResolvedValue({
+      ...article,
+      userId: "other-user-456",
+    });
+
+    const result = await service.getArticleById(article.id, userId);
+
+    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the article does not exist", async () => {
+    model.findById.mockResolvedValue(null);
+
+    const result = await service.getArticleById(article.id, userId);
+
+    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(result).toBeNull();
   });
 
   it("normalizes URLs before searching", async () => {

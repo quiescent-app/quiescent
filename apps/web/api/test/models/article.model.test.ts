@@ -135,7 +135,7 @@ describe("ArticleModel", () => {
         userId,
       });
 
-      const article = await articleModel.findById(created.id, userId);
+      const article = await articleModel.findById(created.id);
 
       expect(article?.id).toBe(created.id);
       expect(article?.title).toBe(articleInput.title);
@@ -144,21 +144,21 @@ describe("ArticleModel", () => {
     it("returns null when the article does not exist", async () => {
       const article = await articleModel.findById(
         "00000000-0000-4000-8000-000000000000",
-        userId,
       );
 
       expect(article).toBeNull();
     });
 
-    it("prevents accessing another user's article", async () => {
+    it("finds an article regardless of its owner", async () => {
       const created = await articleModel.create({
         ...articleInput,
-        userId,
+        userId: otherUserId,
       });
 
-      const article = await articleModel.findById(created.id, otherUserId);
+      const article = await articleModel.findById(created.id);
 
-      expect(article).toBeNull();
+      expect(article?.id).toBe(created.id);
+      expect(article?.userId).toBe(otherUserId);
     });
   });
 
@@ -259,7 +259,7 @@ describe("ArticleModel", () => {
 
       expect(updated).toBeNull();
 
-      const original = await articleModel.findById(created.id, userId);
+      const original = await articleModel.findById(created.id);
 
       expect(original?.readingProgress).toBe(0);
     });
@@ -286,7 +286,7 @@ describe("ArticleModel", () => {
 
       expect(deleted).toBe(true);
 
-      const article = await articleModel.findById(created.id, userId);
+      const article = await articleModel.findById(created.id);
 
       expect(article).toBeNull();
     });
@@ -301,7 +301,7 @@ describe("ArticleModel", () => {
 
       expect(deleted).toBe(false);
 
-      const article = await articleModel.findById(created.id, userId);
+      const article = await articleModel.findById(created.id);
 
       expect(article).not.toBeNull();
     });
