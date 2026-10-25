@@ -19,4 +19,14 @@ describe("database migration", () => {
 
     expect(result.rows).toEqual([{ table_name: "users" }]);
   });
+
+  it("creates the articles table from an empty database", async () => {
+    ({ client } = await createTestDatabase());
+
+    const result = await client.query<{ table_name: string }>(
+      "select table_name from information_schema.tables where table_schema = 'public' and table_name = 'articles'",
+    );
+
+    expect(result.rows).toEqual([{ table_name: "articles" }]);
+  });
 });
