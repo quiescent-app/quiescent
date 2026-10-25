@@ -247,33 +247,6 @@ describe("ArticleModel", () => {
       expect(updated?.completedAt).toBeNull();
     });
 
-    it("rejects invalid reading progress", async () => {
-      const created = await articleModel.create({
-        ...articleInput,
-        userId,
-      });
-
-      await expect(
-        articleModel.update(created.id, userId, {
-          readingProgress: 101,
-        }),
-      ).rejects.toThrow(
-        "Reading progress must be an integer between 0 and 100",
-      );
-
-      await expect(
-        articleModel.update(created.id, userId, {
-          readingProgress: -1,
-        }),
-      ).rejects.toThrow();
-
-      await expect(
-        articleModel.update(created.id, userId, {
-          readingProgress: 50.5,
-        }),
-      ).rejects.toThrow();
-    });
-
     it("returns null when updating another user's article", async () => {
       const created = await articleModel.create({
         ...articleInput,
@@ -299,6 +272,47 @@ describe("ArticleModel", () => {
       );
 
       expect(updated).toBeNull();
+    });
+  });
+
+  describe("delete", () => {
+    it("deletes an existing article", async () => {
+      const created = await articleModel.create({
+        ...articleInput,
+        userId,
+      });
+
+      const deleted = await articleModel.delete(created.id, userId);
+
+      expect(deleted).toBe(true);
+
+      const article = await articleModel.findById(created.id, userId);
+
+      expect(article).toBeNull();
+    });
+
+    it("prevents deleting another user's article", async () => {
+      const created = await articleModel.create({
+        ...articleInput,
+        userId,
+      });
+
+      const deleted = await articleModel.delete(created.id, otherUserId);
+
+      expect(deleted).toBe(false);
+
+      const article = await articleModel.findById(created.id, userId);
+
+      expect(article).not.toBeNull();
+    });
+
+    it("returns false when deleting a nonexistent article", async () => {
+      const deleted = await articleModel.delete(
+        "00000000-0000-4000-8000-000000000000",
+        userId,
+      );
+
+      expect(deleted).toBe(false);
     });
   });
 });

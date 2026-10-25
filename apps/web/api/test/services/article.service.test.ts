@@ -26,6 +26,7 @@ describe("ArticleService", () => {
     findById: ReturnType<typeof vi.fn>;
     findByUrl: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
   };
 
   let service: ArticleService;
@@ -37,6 +38,7 @@ describe("ArticleService", () => {
       findById: vi.fn(),
       findByUrl: vi.fn(),
       update: vi.fn(),
+      delete: vi.fn(),
     };
 
     service = new ArticleService(model as unknown as ArticleModel);
@@ -136,5 +138,38 @@ describe("ArticleService", () => {
     });
 
     expect(result?.readingProgress).toBe(75);
+  });
+
+  it.each([-1, 101, 50.5])(
+    "rejects invalid reading progress: %s",
+    async (readingProgress) => {
+      await expect(
+        service.updateArticle(article.id, userId, {
+          readingProgress,
+        }),
+      ).rejects.toThrow(
+        "Reading progress must be an integer between 0 and 100",
+      );
+
+      expect(model.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it("deletes an article", async () => {
+    model.delete.mockResolvedValue(true);
+
+    const result = await service.deleteArticle(article.id, userId);
+
+    expect(model.delete).toHaveBeenCalledWith(article.id, userId);
+    expect(result).toBe(true);
+  });
+
+  it("returns false when deleting a nonexistent article", async () => {
+    model.delete.mockResolvedValue(false);
+
+    const result = await service.deleteArticle(article.id, userId);
+
+    expect(model.delete).toHaveBeenCalledWith(article.id, userId);
+    expect(result).toBe(false);
   });
 });
