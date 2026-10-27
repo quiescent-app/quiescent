@@ -23,7 +23,7 @@ describe("ArticleService", () => {
   let model: {
     create: ReturnType<typeof vi.fn>;
     findByUserId: ReturnType<typeof vi.fn>;
-    findById: ReturnType<typeof vi.fn>;
+    findByArticleId: ReturnType<typeof vi.fn>;
     findByUrl: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     delete: ReturnType<typeof vi.fn>;
@@ -35,7 +35,7 @@ describe("ArticleService", () => {
     model = {
       create: vi.fn(),
       findByUserId: vi.fn(),
-      findById: vi.fn(),
+      findByArticleId: vi.fn(),
       findByUrl: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -98,33 +98,33 @@ describe("ArticleService", () => {
   });
 
   it("retrieves an article by ID", async () => {
-    model.findById.mockResolvedValue(article);
+    model.findByArticleId.mockResolvedValue(article);
 
     const result = await service.getArticleById(article.id, userId);
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(model.findByArticleId).toHaveBeenCalledWith(article.id);
 
     expect(result).toEqual(article);
   });
 
   it("prevents accessing another user's article by ID", async () => {
-    model.findById.mockResolvedValue({
+    model.findByArticleId.mockResolvedValue({
       ...article,
       userId: "other-user-456",
     });
 
     const result = await service.getArticleById(article.id, userId);
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(model.findByArticleId).toHaveBeenCalledWith(article.id);
     expect(result).toBeNull();
   });
 
   it("returns null when the article does not exist", async () => {
-    model.findById.mockResolvedValue(null);
+    model.findByArticleId.mockResolvedValue(null);
 
     const result = await service.getArticleById(article.id, userId);
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(model.findByArticleId).toHaveBeenCalledWith(article.id);
     expect(result).toBeNull();
   });
 
