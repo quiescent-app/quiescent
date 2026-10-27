@@ -9,7 +9,8 @@
     "db:migrate": "tsx db/migrate.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run test"
+    "test:schema": "tsx script/generate-test-schema.ts",
+    "test": "pnpm run test:schema && vitest run test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
