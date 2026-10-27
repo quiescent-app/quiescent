@@ -11,7 +11,7 @@ Example:
 - Branch: `feat/kevin/github-makefile-init`
 - PR title: `feat/kevin: github-makefile-init`
 
-See [Branch and PR Naming Guidelines](https://github.com/quiescent-app/quiescent/tree/main/docs/BRANCH_AND_PR_NAMING.md) for approved categories and detailed naming rules.
+See [Branch and PR Naming Guidelines](https://github.com/quiescent-app/quiescent/tree/main/docs/pr_and_branch_naming.md) for approved categories and detailed naming rules.
 
 ---
 
