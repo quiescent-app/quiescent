@@ -49,7 +49,9 @@ export async function verifyAccessToken(
     algorithms: ["HS256"],
   });
 
-  if (!payload.sub) throw new Error("Access token is missing its subject");
+  if (!payload.sub) {
+    throw new Error("Access token is missing its subject");
+  }
   return { userId: payload.sub };
 }
 

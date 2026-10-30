@@ -16,9 +16,15 @@
     "service",
     "controller",
     "routes",
+    "middleware",
+    "errors",
     "test",
     "drizzle.config.ts",
-    "eslint.config.js"
-, "schema", "db"  ],
+    "eslint.config.js",
+    "schema",
+    "db",
+    "app.ts",
+    "server.ts"
+  ],
   "exclude": ["ui", "drizzle", "node_modules"]
 }
