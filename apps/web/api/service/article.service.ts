@@ -7,7 +7,7 @@ import { AppError, HttpStatus } from "../errors/appError.js";
 import {
   getArticleDomain,
   isArticleUrlUniqueViolation,
-  normalizeUrl,
+  normalizeArticleUrl,
 } from "../utils/article.utils.js";
 
 export interface CreateArticleRequest {
@@ -24,7 +24,7 @@ export class ArticleService {
       throw new AppError(HttpStatus.BAD_REQUEST, "Article title is required");
     }
 
-    const url = normalizeUrl(input.url);
+    const url = normalizeArticleUrl(input.url);
     const domain = getArticleDomain(url);
 
     const existingArticle = await this.articleModel.findByUrl(url, userId);
@@ -64,7 +64,7 @@ export class ArticleService {
   }
 
   async getArticleByUrl(url: string, userId: string) {
-    const normalizedUrl = normalizeUrl(url);
+    const normalizedUrl = normalizeArticleUrl(url);
 
     return this.articleModel.findByUrl(normalizedUrl, userId);
   }
