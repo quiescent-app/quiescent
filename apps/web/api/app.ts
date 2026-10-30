@@ -9,14 +9,16 @@ import { ArticleService } from "./service/article.service.js";
 
 export function createApp(
   authService: AuthService,
-  articleService: ArticleService,
+  articleService?: ArticleService,
   jwtSecret?: Uint8Array,
 ): Express {
   const app = express();
 
   app.use(express.json({ limit: "16kb" }));
   app.use("/auth", createAuthRouter(authService));
-  app.use("/articles", createArticleRouter(articleService, jwtSecret));
+  if (articleService) {
+    app.use("/articles", createArticleRouter(articleService, jwtSecret));
+  }
   app.use((_req, _res, next) => {
     next(new AppError(HttpStatus.NOT_FOUND, "Route not found"));
   });
