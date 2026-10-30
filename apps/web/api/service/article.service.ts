@@ -3,7 +3,12 @@ import {
   type UpdateArticleInput,
 } from "../model/article.model.js";
 
-import { normalizeArticleUrl, getArticleDomain } from "../utils/article-url.js";
+import { AppError, HttpStatus } from "../errors/appError.js";
+import {
+  getArticleDomain,
+  isArticleUrlUniqueViolation,
+  normalizeUrl,
+} from "../utils/article.utils.js";
 
 export interface CreateArticleRequest {
   title: string;
@@ -16,25 +21,32 @@ export class ArticleService {
 
   async createArticle(userId: string, input: CreateArticleRequest) {
     if (!input.title?.trim()) {
-      throw new Error("Article title is required");
+      throw new AppError(HttpStatus.BAD_REQUEST, "Article title is required");
     }
 
-    const url = normalizeArticleUrl(input.url);
+    const url = normalizeUrl(input.url);
     const domain = getArticleDomain(url);
 
     const existingArticle = await this.articleModel.findByUrl(url, userId);
 
     if (existingArticle) {
-      throw new Error("Article already exists");
+      throw new AppError(HttpStatus.CONFLICT, "Article already exists");
     }
 
-    return this.articleModel.create({
-      userId,
-      title: input.title.trim(),
-      url,
-      domain,
-      content: input.content,
-    });
+    try {
+      return await this.articleModel.create({
+        userId,
+        title: input.title.trim(),
+        url,
+        domain,
+        content: input.content,
+      });
+    } catch (error) {
+      if (isArticleUrlUniqueViolation(error)) {
+        throw new AppError(HttpStatus.CONFLICT, "Article already exists");
+      }
+      throw error;
+    }
   }
 
   async getArticles(userId: string) {
@@ -52,7 +64,7 @@ export class ArticleService {
   }
 
   async getArticleByUrl(url: string, userId: string) {
-    const normalizedUrl = normalizeArticleUrl(url);
+    const normalizedUrl = normalizeUrl(url);
 
     return this.articleModel.findByUrl(normalizedUrl, userId);
   }
@@ -65,7 +77,10 @@ export class ArticleService {
       readingProgress < 0 ||
       readingProgress > 100
     ) {
-      throw new Error("Reading progress must be an integer between 0 and 100");
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "Reading progress must be an integer between 0 and 100",
+      );
     }
     return this.articleModel.update(id, userId, input);
   }

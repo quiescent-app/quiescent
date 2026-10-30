@@ -30,3 +30,12 @@ export function requireRefreshToken(body: unknown): string {
   }
   return values.refreshToken;
 }
+
+const UUID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+export function requireArticleId(id: unknown): string {
+  if (typeof id !== "string" || !UUID_PATTERN.test(id)) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Article ID must be a valid UUID");
+  }
+  return id;
+}

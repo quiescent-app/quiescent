@@ -94,3 +94,21 @@ invalid credentials or refresh tokens return `401`, duplicate email returns
 `409`, an oversized body returns `413`, unsupported request encoding returns
 `415`, unknown routes return `404`, and unexpected server errors return a
 generic `500` response.
+
+## Articles API
+
+Article routes require `Authorization: Bearer <accessToken>` and operate only on
+articles owned by the authenticated user.
+
+| Method and route | Behavior | Success |
+| --- | --- | --- |
+| `GET /articles` | List the user's articles | `200 OK` |
+| `POST /articles` | Create from `{ "title": "...", "url": "...", "content": "..." }` (`content` is optional) | `201 Created` |
+| `GET /articles/by-url?url=<encoded-url>` | Find the user's article by URL | `200 OK` |
+| `GET /articles/:id` | Get one article | `200 OK` |
+| `PATCH /articles/:id` | Update from `{ "readingProgress": 0 }` (integer from 0 to 100) | `200 OK` |
+| `DELETE /articles/:id` | Delete one article | `204 No Content` |
+
+Article requests return `401` when authentication is missing or invalid, `400`
+for invalid input, `404` when the article is missing or belongs to another
+user, and `409` when the user already saved that URL.
