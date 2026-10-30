@@ -12,7 +12,9 @@ export class UserModel {
       .values({ email: input.email, password: input.password })
       .returning();
 
-    if (!user) throw new Error("User insert did not return a record");
+    if (!user) {
+      throw new Error("User insert did not return a record");
+    }
     return user;
   }
 

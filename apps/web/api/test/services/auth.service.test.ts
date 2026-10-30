@@ -3,15 +3,12 @@ import { NeonDbError } from "@neondatabase/serverless";
 
 import {
   AuthService,
-  EmailAlreadyExistsError,
-  InvalidCredentialsError,
-  InvalidPasswordError,
-  InvalidRefreshTokenError,
   type PasswordHasher,
 } from "../../service/auth.service.js";
 import { RefreshTokenModel } from "../../model/refreshToken.model.js";
 import { UserModel } from "../../model/user.model.js";
 import type { User } from "../../schema/user.schema.js";
+import { AppError, HttpStatus } from "../../errors/appError.js";
 import { hashRefreshToken } from "../../utils/token.utils.js";
 
 const jwtSecret = new TextEncoder().encode("test-secret-that-is-at-least-32-bytes");
@@ -56,8 +53,17 @@ function makeAuthService(user = makeUser()) {
   return { service, user, passwordHasher, users, refreshTokens };
 }
 
+async function expectAppError(
+  error: Promise<unknown>,
+  statusCode: HttpStatus,
+  message: string,
+): Promise<void> {
+  await expect(error).rejects.toBeInstanceOf(AppError);
+  await expect(error).rejects.toMatchObject({ statusCode, message });
+}
+
 describe("AuthService", () => {
-  it("registers a user and returns tokens with a safe user record", async () => {
+  it("should register a user and return tokens with a safe user record", async () => {
     const { service, user, users, refreshTokens } = makeAuthService();
 
     const result = await service.register({
@@ -86,16 +92,19 @@ describe("AuthService", () => {
     });
   });
 
-  it("rejects a short password without creating a user", async () => {
+  it("should reject a short password with status code 400 without creating a user", async () => {
     const { service, users } = makeAuthService();
 
-    await expect(
-      service.register({ email: "reader@example.com", password: "short" }),
-    ).rejects.toBeInstanceOf(InvalidPasswordError);
+    const registration = service.register({ email: "reader@example.com", password: "short" });
+    await expectAppError(
+      registration,
+      HttpStatus.BAD_REQUEST,
+      "Password must be at least 8 characters long",
+    );
     expect(users.create).not.toHaveBeenCalled();
   });
 
-  it("maps a duplicate email error and does not create tokens", async () => {
+  it("should reject a duplicate email with status code 409 without creating tokens", async () => {
     const { service, users, refreshTokens } = makeAuthService();
     const duplicateEmailError = Object.assign(
       Object.create(NeonDbError.prototype) as NeonDbError,
@@ -103,9 +112,15 @@ describe("AuthService", () => {
     );
     users.create.mockRejectedValue(duplicateEmailError);
 
-    await expect(
-      service.register({ email: " READER@example.com ", password: "correct-password" }),
-    ).rejects.toBeInstanceOf(EmailAlreadyExistsError);
+    const registration = service.register({
+      email: " READER@example.com ",
+      password: "correct-password",
+    });
+    await expectAppError(
+      registration,
+      HttpStatus.CONFLICT,
+      "An account with this email already exists",
+    );
     expect(users.create).toHaveBeenCalledWith({
       email: "reader@example.com",
       password: "hashed:correct-password",
@@ -113,7 +128,7 @@ describe("AuthService", () => {
     expect(refreshTokens.create).not.toHaveBeenCalled();
   });
 
-  it("propagates user creation failures without creating tokens", async () => {
+  it("should propagate user creation failures without creating tokens", async () => {
     const { service, users, refreshTokens } = makeAuthService();
     const databaseError = new Error("database unavailable");
     users.create.mockRejectedValue(databaseError);
@@ -124,7 +139,7 @@ describe("AuthService", () => {
     expect(refreshTokens.create).not.toHaveBeenCalled();
   });
 
-  it("logs in with a normalized email", async () => {
+  it("should log in with a normalized email", async () => {
     const validLogin = makeAuthService();
 
     const result = await validLogin.service.login({
@@ -137,29 +152,27 @@ describe("AuthService", () => {
     expect(validLogin.refreshTokens.create).toHaveBeenCalledOnce();
   });
 
-  it("rejects invalid login credentials", async () => {
+  it("should reject invalid login credentials with status code 401", async () => {
     const invalidLogin = makeAuthService();
-    await expect(
-      invalidLogin.service.login({
-        email: "reader@example.com",
-        password: "wrong-password",
-      }),
-    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    const login = invalidLogin.service.login({
+      email: "reader@example.com",
+      password: "wrong-password",
+    });
+    await expectAppError(login, HttpStatus.UNAUTHORIZED, "Invalid email or password");
     expect(invalidLogin.refreshTokens.create).not.toHaveBeenCalled();
   });
 
-  it("rejects an unknown login email without verifying or creating tokens", async () => {
+  it("should reject an unknown login email with status code 401 without verifying or creating tokens", async () => {
     const { service, users, passwordHasher, refreshTokens } = makeAuthService();
     users.findByEmail.mockResolvedValue(null);
 
-    await expect(
-      service.login({ email: "missing@example.com", password: "correct-password" }),
-    ).rejects.toBeInstanceOf(InvalidCredentialsError);
+    const login = service.login({ email: "missing@example.com", password: "correct-password" });
+    await expectAppError(login, HttpStatus.UNAUTHORIZED, "Invalid email or password");
     expect(passwordHasher.verify).not.toHaveBeenCalled();
     expect(refreshTokens.create).not.toHaveBeenCalled();
   });
 
-  it("issues different tokens to different users", async () => {
+  it("should issue different tokens to different users", async () => {
     const firstUser = makeAuthService(makeUser());
     const secondUser = makeAuthService(
       makeUser({
@@ -182,7 +195,7 @@ describe("AuthService", () => {
     expect(firstResult.refreshToken).not.toBe(secondResult.refreshToken);
   });
 
-  it("rotates the newest valid refresh token in its family", async () => {
+  it("should rotate the newest valid refresh token and return a replacement token", async () => {
     const { service, user, refreshTokens } = makeAuthService();
     const currentToken = "current-refresh-token";
     refreshTokens.findByHash.mockResolvedValue({
@@ -207,7 +220,7 @@ describe("AuthService", () => {
     expect(result.user.id).toBe(user.id);
   });
 
-  it("revokes the token family when an older refresh token is reused", async () => {
+  it("should reject with status code 401 and revoke the family when an old refresh token is reused", async () => {
     const { service, user, refreshTokens } = makeAuthService();
     const olderToken = "older-refresh-token";
     refreshTokens.findByHash.mockResolvedValue({
@@ -220,25 +233,29 @@ describe("AuthService", () => {
       revokedAt: new Date(),
     });
 
-    await expect(service.refresh(olderToken)).rejects.toBeInstanceOf(
-      InvalidRefreshTokenError,
+    await expectAppError(
+      service.refresh(olderToken),
+      HttpStatus.UNAUTHORIZED,
+      "Invalid or expired refresh token",
     );
     expect(refreshTokens.rotate).not.toHaveBeenCalled();
     expect(refreshTokens.revokeFamily).toHaveBeenCalledOnce();
     expect(refreshTokens.revokeFamily).toHaveBeenCalledWith("family-id");
   });
 
-  it("rejects an unknown refresh token without rotating or revoking a family", async () => {
+  it("should reject with status code 401 for an unknown refresh token without rotating or revoking a family", async () => {
     const { service, refreshTokens } = makeAuthService();
 
-    await expect(service.refresh("unknown-refresh-token")).rejects.toBeInstanceOf(
-      InvalidRefreshTokenError,
+    await expectAppError(
+      service.refresh("unknown-refresh-token"),
+      HttpStatus.UNAUTHORIZED,
+      "Invalid or expired refresh token",
     );
     expect(refreshTokens.rotate).not.toHaveBeenCalled();
     expect(refreshTokens.revokeFamily).not.toHaveBeenCalled();
   });
 
-  it("rejects an expired refresh token", async () => {
+  it("should reject with status code 401 for an expired refresh token", async () => {
     const { service, user, refreshTokens } = makeAuthService();
     refreshTokens.findByHash.mockResolvedValue({
       id: "expired-token-row-id",
@@ -250,14 +267,16 @@ describe("AuthService", () => {
       revokedAt: null,
     });
 
-    await expect(service.refresh("expired-refresh-token")).rejects.toBeInstanceOf(
-      InvalidRefreshTokenError,
+    await expectAppError(
+      service.refresh("expired-refresh-token"),
+      HttpStatus.UNAUTHORIZED,
+      "Invalid or expired refresh token",
     );
     expect(refreshTokens.rotate).not.toHaveBeenCalled();
     expect(refreshTokens.revokeFamily).not.toHaveBeenCalled();
   });
 
-  it("rejects a refresh token when its user no longer exists", async () => {
+  it("should reject with status code 401 when a refresh token belongs to a missing user", async () => {
     const { service, user, users, refreshTokens } = makeAuthService();
     refreshTokens.findByHash.mockResolvedValue({
       id: "orphaned-token-row-id",
@@ -270,13 +289,15 @@ describe("AuthService", () => {
     });
     users.findById.mockResolvedValue(null);
 
-    await expect(service.refresh("orphaned-refresh-token")).rejects.toBeInstanceOf(
-      InvalidRefreshTokenError,
+    await expectAppError(
+      service.refresh("orphaned-refresh-token"),
+      HttpStatus.UNAUTHORIZED,
+      "Invalid or expired refresh token",
     );
     expect(refreshTokens.rotate).not.toHaveBeenCalled();
   });
 
-  it("revokes the family when a concurrent rotation reveals the token was consumed", async () => {
+  it("should reject with status code 401 and revoke the family after concurrent token reuse", async () => {
     const { service, user, refreshTokens } = makeAuthService();
     const token = "racing-refresh-token";
     const currentRecord = {
@@ -293,12 +314,16 @@ describe("AuthService", () => {
       .mockResolvedValueOnce({ ...currentRecord, revokedAt: new Date() });
     refreshTokens.rotate.mockResolvedValueOnce(null);
 
-    await expect(service.refresh(token)).rejects.toBeInstanceOf(InvalidRefreshTokenError);
+    await expectAppError(
+      service.refresh(token),
+      HttpStatus.UNAUTHORIZED,
+      "Invalid or expired refresh token",
+    );
     expect(refreshTokens.findByHash).toHaveBeenCalledTimes(2);
     expect(refreshTokens.revokeFamily).toHaveBeenCalledWith("family-id");
   });
 
-  it("revokes the refresh-token family when logging out", async () => {
+  it("should revoke the refresh-token family when logging out", async () => {
     const { service, refreshTokens } = makeAuthService();
     refreshTokens.findByHash.mockResolvedValue({
       id: "token-row-id",
