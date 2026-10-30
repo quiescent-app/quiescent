@@ -4,7 +4,6 @@ import request from "supertest";
 import { createApp } from "../../app.js";
 import { AppError, HttpStatus } from "../../errors/appError.js";
 import { AuthService } from "../../service/auth.service.js";
-import { ArticleService } from "../../service/article.service.js";
 
 const authResult = {
   user: {
@@ -26,17 +25,6 @@ function makeService() {
   };
 }
 
-function makeArticleService() {
-  return {
-    createArticle: vi.fn(),
-    getArticles: vi.fn(),
-    getArticleById: vi.fn(),
-    getArticleByUrl: vi.fn(),
-    updateArticle: vi.fn(),
-    deleteArticle: vi.fn(),
-  };
-}
-
 describe("authentication routes", () => {
   async function send(
     service: ReturnType<typeof makeService>,
@@ -44,10 +32,7 @@ describe("authentication routes", () => {
     body?: string,
     headers: Record<string, string> = {},
   ): Promise<request.Response> {
-    const app = createApp(
-      service as unknown as AuthService,
-      makeArticleService() as unknown as ArticleService,
-    );
+    const app = createApp(service as unknown as AuthService);
 
     return request(app)
       .post(path)
