@@ -42,7 +42,7 @@ export class ArticleModel {
       .orderBy(desc(articles.lastAccessedAt));
   }
 
-  async findById(id: string): Promise<ArticleRecord | null> {
+  async findByArticleId(id: string): Promise<ArticleRecord | null> {
     const [article] = await this.database
       .select()
       .from(articles)

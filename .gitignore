@@ -28,3 +28,9 @@ yarn-error.log*
 
 # Vite cache
 .vite/
+
+# Drizzle migrations
+drizzle/
+
+# Generated test database schema
+apps/web/api/test/database/schema.sql

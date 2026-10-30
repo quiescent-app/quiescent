@@ -42,7 +42,7 @@ export class ArticleService {
   }
 
   async getArticleById(id: string, userId: string) {
-    const article = await this.articleModel.findById(id);
+    const article = await this.articleModel.findByArticleId(id);
 
     if (!article || article.userId !== userId) {
       return null;
