@@ -9,7 +9,7 @@ CATEGORIES="feat|test|fix|cicd|docs|refactor|chore|perf|security"
 
 DEVELOPER="[a-z][a-z0-9]*"
 BRANCH_DESCRIPTION="[a-z0-9]+(-[a-z0-9]+)*"
-TITLE_DESCRIPTION="[A-Za-z0-9]+([ -][A-Za-z0-9]+)*"
+TITLE_DESCRIPTION=".+"
 
 BRANCH_PATTERN="^(${CATEGORIES})/(${DEVELOPER})/(${BRANCH_DESCRIPTION})$"
 TITLE_PATTERN="^(${CATEGORIES})/(${DEVELOPER}): (${TITLE_DESCRIPTION})$"
