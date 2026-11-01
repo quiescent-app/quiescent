@@ -72,7 +72,7 @@ Example:
 feat/kevin: github-makefile-init
 ```
 
-The category and developer must match those in the source branch name. However, the description may differ and can use natural language.
+The category and developer must match those in the source branch name. However, the description may differ.
 
 For example:
 
