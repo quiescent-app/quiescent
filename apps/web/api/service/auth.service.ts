@@ -24,10 +24,9 @@ type AuthResult = {
   refreshToken: string;
 }
 
-
-
 const REFRESH_TOKEN_LIFETIME_MILLISECONDS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MIN_PASSWORD_LENGTH = 8;
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
@@ -41,16 +40,17 @@ export class AuthService {
     verify: (hash, password) => argon2.verify(hash, password),
   };
 
-  async register(input: {email: string, password: string}): Promise<AuthResult> {
-    if (input.password.length < MIN_PASSWORD_LENGTH) {
+  async register(input: unknown): Promise<AuthResult> {
+    const { email: rawEmail, password: rawPassword } = this.requireCredentials(input);
+    if (rawPassword.length < MIN_PASSWORD_LENGTH) {
       throw new AppError(
         HttpStatus.BAD_REQUEST,
         `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
       );
     }
 
-    const email = normalizeEmail(input.email);
-    const password = await this.passwordHasher.hash(input.password);
+    const email = normalizeEmail(rawEmail);
+    const password = await this.passwordHasher.hash(rawPassword);
 
     let user: User;
     try {
@@ -65,22 +65,20 @@ export class AuthService {
     return this.createAuthResult(user, randomUUID());
   }
 
-  async login(input: {email: string, password: string}): Promise<AuthResult> {
-    const email = normalizeEmail(input.email);
+  async login(input: unknown): Promise<AuthResult> {
+    const { email: rawEmail, password } = this.requireCredentials(input);
+    const email = normalizeEmail(rawEmail);
     const user = await userModel.findByEmail(email);
 
-    if (!user || !(await this.passwordHasher.verify(user.password, input.password))) {
+    if (!user || !(await this.passwordHasher.verify(user.password, password))) {
       throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid email or password");
     }
 
     return this.createAuthResult(user, randomUUID());
   }
 
-  async refresh(refreshToken: string): Promise<AuthResult> {
-    if (!refreshToken) {
-      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
-    }
-
+  async refresh(input: unknown): Promise<AuthResult> {
+    const refreshToken = this.requireRefreshToken(input);
     const oldHash = hashRefreshToken(refreshToken);
     const existing = await refreshTokenModel.findByHash(oldHash);
 
@@ -121,11 +119,48 @@ export class AuthService {
     };
   }
 
-  async logout(refreshToken: string | null | undefined): Promise<void> {
+  async logout(input: unknown): Promise<void> {
+    const values = input === undefined || input === null ? {} : this.requireObjectBody(input);
+    const refreshToken = values["refreshToken"];
+    if (refreshToken === undefined) return;
+    if (typeof refreshToken !== "string") {
+      throw new AppError(HttpStatus.BAD_REQUEST, "Refresh token must be a string");
+    }
     if (!refreshToken) return;
 
     const token = await refreshTokenModel.findByHash(hashRefreshToken(refreshToken));
     if (token) await refreshTokenModel.revokeFamily(token.familyId);
+  }
+
+  private requireCredentials(input: unknown): { email: string; password: string } {
+    const values = this.requireObjectBody(input);
+    const email = values["email"];
+    const password = values["password"];
+
+    if (typeof email !== "string" || !EMAIL_PATTERN.test(email.trim())) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "A valid email is required");
+    }
+    if (typeof password !== "string" || password.length === 0) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "A password is required");
+    }
+
+    return { email, password };
+  }
+
+  private requireRefreshToken(input: unknown): string {
+    const values = this.requireObjectBody(input);
+    const refreshToken = values["refreshToken"];
+    if (typeof refreshToken !== "string" || refreshToken.length === 0) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "A refresh token is required");
+    }
+    return refreshToken;
+  }
+
+  private requireObjectBody(input: unknown): Record<string, unknown> {
+    if (typeof input !== "object" || input === null || Array.isArray(input)) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "Request body must be a JSON object");
+    }
+    return input as Record<string, unknown>;
   }
 
   private async createAuthResult(
