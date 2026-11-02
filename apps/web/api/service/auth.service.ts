@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 import * as argon2 from "argon2";
 
+import { AppError, HttpStatus } from "../errors/appError.js";
 import { userModel } from "../model/user.model.js";
 import { refreshTokenModel } from "../model/refreshToken.model.js";
 import type { User, AuthUser } from "../schema/user.schema.js";
@@ -28,34 +29,6 @@ type AuthResult = {
 const REFRESH_TOKEN_LIFETIME_MILLISECONDS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MIN_PASSWORD_LENGTH = 8;
 
-export class EmailAlreadyExistsError extends Error {
-  constructor() {
-    super("An account with this email already exists");
-    this.name = "EmailAlreadyExistsError";
-  }
-}
-
-export class InvalidPasswordError extends Error {
-  constructor() {
-    super(`Password must be at least ${MIN_PASSWORD_LENGTH} characters long`);
-    this.name = "InvalidPasswordError";
-  }
-}
-
-export class InvalidCredentialsError extends Error {
-  constructor() {
-    super("Invalid email or password");
-    this.name = "InvalidCredentialsError";
-  }
-}
-
-export class InvalidRefreshTokenError extends Error {
-  constructor() {
-    super("Invalid or expired refresh token");
-    this.name = "InvalidRefreshTokenError";
-  }
-}
-
 export interface PasswordHasher {
   hash(password: string): Promise<string>;
   verify(hash: string, password: string): Promise<boolean>;
@@ -70,7 +43,10 @@ export class AuthService {
 
   async register(input: {email: string, password: string}): Promise<AuthResult> {
     if (input.password.length < MIN_PASSWORD_LENGTH) {
-      throw new InvalidPasswordError();
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        `Password must be at least ${MIN_PASSWORD_LENGTH} characters long`,
+      );
     }
 
     const email = normalizeEmail(input.email);
@@ -80,7 +56,9 @@ export class AuthService {
     try {
       user = await userModel.create({ email, password });
     } catch (error) {
-      if (isEmailUniqueViolation(error)) throw new EmailAlreadyExistsError();
+      if (isEmailUniqueViolation(error)) {
+        throw new AppError(HttpStatus.CONFLICT, "An account with this email already exists");
+      }
       throw error;
     }
 
@@ -92,29 +70,33 @@ export class AuthService {
     const user = await userModel.findByEmail(email);
 
     if (!user || !(await this.passwordHasher.verify(user.password, input.password))) {
-      throw new InvalidCredentialsError();
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid email or password");
     }
 
     return this.createAuthResult(user, randomUUID());
   }
 
   async refresh(refreshToken: string): Promise<AuthResult> {
-    if (!refreshToken) throw new InvalidRefreshTokenError();
+    if (!refreshToken) {
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
+    }
 
     const oldHash = hashRefreshToken(refreshToken);
     const existing = await refreshTokenModel.findByHash(oldHash);
 
     if (!existing || existing.expiresAt.getTime() <= Date.now()) {
-      throw new InvalidRefreshTokenError();
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
     }
 
     if (existing.revokedAt) {
       await refreshTokenModel.revokeFamily(existing.familyId);
-      throw new InvalidRefreshTokenError();
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
     }
 
     const user = await userModel.findById(existing.userId);
-    if (!user) throw new InvalidRefreshTokenError();
+    if (!user) {
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
+    }
 
     const accessToken = await createAccessToken(existing.userId, this.jwtSecret);
     const replacementToken = createRefreshToken();
@@ -129,7 +111,7 @@ export class AuthService {
       if (latest?.revokedAt) {
         await refreshTokenModel.revokeFamily(latest.familyId);
       }
-      throw new InvalidRefreshTokenError();
+      throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
     }
 
     return {
