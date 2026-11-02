@@ -10,7 +10,8 @@
     "dev": "tsx watch server.ts",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run test"
+    "test:schema": "tsx test/init.ts",
+    "test": "pnpm run test:schema && vitest run test"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.2.0",
