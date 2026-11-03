@@ -1,7 +1,11 @@
-.PHONY: install build build-api build-extension build-web test test-api test-extension test-web db-generate db-migrate lint format
+.PHONY: install dev build build-api build-extension build-web test test-api test-extension test-web db-generate db-migrate lint format
 
 install:
 	pnpm install
+
+# Run both development servers in parallel. Vite provides frontend HMR.
+dev:
+	pnpm --parallel --filter ./apps/web/api --filter ./apps/web/ui run dev
 
 build: build-api build-extension build-web
 
