@@ -208,7 +208,7 @@ describe("AuthService", () => {
       revokedAt: null,
     });
 
-    const result = await service.refresh({ refreshToken: currentToken });
+    const result = await service.refresh(currentToken);
 
     expect(refreshTokens.rotate).toHaveBeenCalledWith(
       hashRefreshToken(currentToken),
@@ -234,7 +234,7 @@ describe("AuthService", () => {
     });
 
     await expectAppError(
-      service.refresh({ refreshToken: olderToken }),
+      service.refresh(olderToken),
       HttpStatus.UNAUTHORIZED,
       "Invalid or expired refresh token",
     );
@@ -247,7 +247,7 @@ describe("AuthService", () => {
     const { service, refreshTokens } = makeAuthService();
 
     await expectAppError(
-      service.refresh({ refreshToken: "unknown-refresh-token" }),
+      service.refresh("unknown-refresh-token"),
       HttpStatus.UNAUTHORIZED,
       "Invalid or expired refresh token",
     );
@@ -268,7 +268,7 @@ describe("AuthService", () => {
     });
 
     await expectAppError(
-      service.refresh({ refreshToken: "expired-refresh-token" }),
+      service.refresh("expired-refresh-token"),
       HttpStatus.UNAUTHORIZED,
       "Invalid or expired refresh token",
     );
@@ -290,7 +290,7 @@ describe("AuthService", () => {
     users.findById.mockResolvedValue(null);
 
     await expectAppError(
-      service.refresh({ refreshToken: "orphaned-refresh-token" }),
+      service.refresh("orphaned-refresh-token"),
       HttpStatus.UNAUTHORIZED,
       "Invalid or expired refresh token",
     );
@@ -315,7 +315,7 @@ describe("AuthService", () => {
     refreshTokens.rotate.mockResolvedValueOnce(null);
 
     await expectAppError(
-      service.refresh({ refreshToken: token }),
+      service.refresh(token),
       HttpStatus.UNAUTHORIZED,
       "Invalid or expired refresh token",
     );
@@ -335,7 +335,7 @@ describe("AuthService", () => {
       revokedAt: null,
     });
 
-    await service.logout({ refreshToken: "refresh-token" });
+    await service.logout("refresh-token");
 
     expect(refreshTokens.revokeFamily).toHaveBeenCalledWith("family-id");
   });
