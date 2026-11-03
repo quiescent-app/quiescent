@@ -80,7 +80,7 @@ export function AppSidebar() {
               tooltip="Log out"
               className="h-10 rounded-lg px-3 text-sm"
               onClick={() => {
-                // TODO: Implement logout functionality
+                // Implement logout functionality here
               }}
             >
               <LogOut />
