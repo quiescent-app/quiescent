@@ -1,9 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
-import { createApp } from "../../app.js";
 import { AppError, HttpStatus } from "../../errors/appError.js";
-import { AuthService } from "../../service/auth.service.js";
+import { authService } from "../../service/auth.service.js";
+import { createTestApp } from "../helpers/createTestApp.js";
 
 const authResult = {
   user: {
@@ -26,13 +26,27 @@ function makeService() {
 }
 
 describe("authentication routes", () => {
+  afterEach(() => vi.restoreAllMocks());
+
   async function send(
     service: ReturnType<typeof makeService>,
     path: string,
     body?: string,
     headers: Record<string, string> = {},
   ): Promise<request.Response> {
-    const app = createApp(service as unknown as AuthService);
+    vi.spyOn(authService, "register").mockImplementation(
+      service.register as unknown as typeof authService.register,
+    );
+    vi.spyOn(authService, "login").mockImplementation(
+      service.login as unknown as typeof authService.login,
+    );
+    vi.spyOn(authService, "refresh").mockImplementation(
+      service.refresh as unknown as typeof authService.refresh,
+    );
+    vi.spyOn(authService, "logout").mockImplementation(
+      service.logout as typeof authService.logout,
+    );
+    const app = createTestApp();
 
     return request(app)
       .post(path)
