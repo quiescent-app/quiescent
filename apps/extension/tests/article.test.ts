@@ -17,16 +17,36 @@ describe("previewFromTab", () => {
       url: expectedUrl,
     });
   });
-  // Accepts http/https protocol only
-  it.each([
-    { url: "chrome://extensions", reason: "browser-internal page" },
-    { url: "file:///article.html", reason: "local file" },
-    { url: "ftp://example.com/story", reason: "unsupported protocol" },
-    { url: "not a url", reason: "invalid URL" },
-  ])("rejects a $reason: $url", ({ url }) => {
-    const tab = { url } as chrome.tabs.Tab;
+  describe("browser-internal pages", () => {
+    it("rejects a chrome URL", () => {
+      const tab = { url: "chrome://extensions" } as chrome.tabs.Tab;
 
-    expect(previewFromTab(tab)).toBeNull();
+      expect(previewFromTab(tab)).toBeNull();
+    });
+  });
+
+  describe("local files", () => {
+    it("rejects a file URL", () => {
+      const tab = { url: "file:///article.html" } as chrome.tabs.Tab;
+
+      expect(previewFromTab(tab)).toBeNull();
+    });
+  });
+
+  describe("unsupported protocols", () => {
+    it("rejects an FTP URL", () => {
+      const tab = { url: "ftp://example.com/story" } as chrome.tabs.Tab;
+
+      expect(previewFromTab(tab)).toBeNull();
+    });
+  });
+
+  describe("invalid URLs", () => {
+    it("rejects a malformed URL", () => {
+      const tab = { url: "not a url" } as chrome.tabs.Tab;
+
+      expect(previewFromTab(tab)).toBeNull();
+    });
   });
   // Some chrome tabs might not expose a url
   it("rejects a missing URL", () => {
