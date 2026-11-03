@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 
-import type { Database } from "../db/client.js";
+import { database, type Database } from "../db/client.js";
 import {
   articles,
   type ArticleRecord,
@@ -93,3 +93,5 @@ export class ArticleModel {
     return deleted.length > 0;
   }
 }
+
+export const articleModel = new ArticleModel(database);

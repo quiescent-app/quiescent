@@ -3,20 +3,14 @@ import express, { type Express } from "express";
 import { AppError, HttpStatus } from "./errors/appError.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
 import authRouter from "./routes/auth.routes.js";
-import { createArticleRouter } from "./routes/article.routes.js";
-import { ArticleService } from "./service/article.service.js";
+import { articleRouter } from "./routes/article.routes.js";
 
-export function createApp(
-  articleService?: ArticleService,
-  jwtSecret?: Uint8Array,
-): Express {
+export function createApp(): Express {
   const app = express();
 
   app.use(express.json({ limit: "16kb" }));
   app.use("/auth", authRouter);
-  if (articleService) {
-    app.use("/articles", createArticleRouter(articleService, jwtSecret));
-  }
+  app.use("/articles", articleRouter);
   app.use((_req, _res, next) => {
     next(new AppError(HttpStatus.NOT_FOUND, "Route not found"));
   });

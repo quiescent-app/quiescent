@@ -1,11 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
-import { createApp } from "../../app.js";
 import { AppError, HttpStatus } from "../../errors/appError.js";
-import { ArticleService } from "../../service/article.service.js";
-import { AuthService } from "../../service/auth.service.js";
+import { articleService } from "../../service/article.service.js";
 import { createAccessToken } from "../../utils/token.utils.js";
+import { createTestApp } from "../helpers/createTestApp.js";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const article = {
@@ -40,17 +39,10 @@ function makeArticleService() {
   };
 }
 
-function makeAuthService() {
-  return {
-    register: vi.fn(),
-    login: vi.fn(),
-    refresh: vi.fn(),
-    logout: vi.fn(),
-  };
-}
-
 describe("article routes", () => {
   let accessToken: string;
+
+  afterEach(() => vi.restoreAllMocks());
 
   beforeEach(async () => {
     accessToken = await createAccessToken(userId, jwtSecret);
@@ -63,11 +55,25 @@ describe("article routes", () => {
     body?: unknown,
     token: string | null = accessToken,
   ): Promise<request.Response> {
-    const app = createApp(
-      makeAuthService() as unknown as AuthService,
-      service as unknown as ArticleService,
-      jwtSecret,
+    vi.spyOn(articleService, "createArticle").mockImplementation(
+      service.createArticle as typeof articleService.createArticle,
     );
+    vi.spyOn(articleService, "getArticles").mockImplementation(
+      service.getArticles as typeof articleService.getArticles,
+    );
+    vi.spyOn(articleService, "getArticleById").mockImplementation(
+      service.getArticleById as typeof articleService.getArticleById,
+    );
+    vi.spyOn(articleService, "getArticleByUrl").mockImplementation(
+      service.getArticleByUrl as typeof articleService.getArticleByUrl,
+    );
+    vi.spyOn(articleService, "updateArticle").mockImplementation(
+      service.updateArticle as typeof articleService.updateArticle,
+    );
+    vi.spyOn(articleService, "deleteArticle").mockImplementation(
+      service.deleteArticle as typeof articleService.deleteArticle,
+    );
+    const app = createTestApp();
     const methodName = method.toLowerCase() as "get" | "post" | "patch" | "delete";
     let test = request(app)[methodName](path);
     if (body !== undefined && body !== null) test = test.send(body as object | string);

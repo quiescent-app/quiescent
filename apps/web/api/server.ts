@@ -1,12 +1,8 @@
 import "dotenv/config";
 
 import { createApp } from "./app.js";
-import { database } from "./db/client.js";
-import { ArticleModel } from "./model/article.model.js";
-import { ArticleService } from "./service/article.service.js";
 
-const articleService = new ArticleService(new ArticleModel(database));
-const app = createApp(articleService);
+const app = createApp();
 const port = Number.parseInt(process.env["PORT"] ?? "3000", 10);
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
