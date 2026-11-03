@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ArticleService } from "../../service/article.service.js";
-import type { ArticleModel } from "../../model/article.model.js";
+import { articleService } from "../../service/article.service.js";
+import { articleModel } from "../../model/article.model.js";
 
 describe("ArticleService", () => {
   const userId = "user-123";
@@ -29,7 +29,7 @@ describe("ArticleService", () => {
     delete: ReturnType<typeof vi.fn>;
   };
 
-  let service: ArticleService;
+  const service = articleService;
 
   beforeEach(() => {
     model = {
@@ -41,8 +41,27 @@ describe("ArticleService", () => {
       delete: vi.fn(),
     };
 
-    service = new ArticleService(model as unknown as ArticleModel);
+    vi.spyOn(articleModel, "create").mockImplementation(
+      model.create as typeof articleModel.create,
+    );
+    vi.spyOn(articleModel, "findByUserId").mockImplementation(
+      model.findByUserId as typeof articleModel.findByUserId,
+    );
+    vi.spyOn(articleModel, "findById").mockImplementation(
+      model.findById as typeof articleModel.findById,
+    );
+    vi.spyOn(articleModel, "findByUrl").mockImplementation(
+      model.findByUrl as typeof articleModel.findByUrl,
+    );
+    vi.spyOn(articleModel, "update").mockImplementation(
+      model.update as typeof articleModel.update,
+    );
+    vi.spyOn(articleModel, "delete").mockImplementation(
+      model.delete as typeof articleModel.delete,
+    );
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   it("creates a new article", async () => {
     model.findByUrl.mockResolvedValue(null);

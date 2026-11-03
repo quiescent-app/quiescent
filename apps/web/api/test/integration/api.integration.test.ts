@@ -1,40 +1,68 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 import { createApp } from "../../app.js";
-import type { Database } from "../../db/client.js";
-import { ArticleModel } from "../../model/article.model.js";
-import { RefreshTokenModel } from "../../model/refreshToken.model.js";
-import { UserModel } from "../../model/user.model.js";
-import { ArticleService } from "../../service/article.service.js";
-import { AuthService } from "../../service/auth.service.js";
+import { articleModel, ArticleModel } from "../../model/article.model.js";
+import { refreshTokenModel, RefreshTokenModel } from "../../model/refreshToken.model.js";
+import { userModel, UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
 import { hashRefreshToken } from "../../utils/token.utils.js";
 
-const jwtSecret = new TextEncoder().encode("integration-test-secret-that-is-32-bytes");
+const databaseState = vi.hoisted(() => ({
+  current: undefined as Record<PropertyKey, unknown> | undefined,
+}));
+
+vi.mock("../../db/client.js", () => ({
+  database: new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const current = databaseState.current;
+        if (!current) throw new Error("Test database has not been initialized");
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === "function" ? value.bind(current) : value;
+      },
+    },
+  ),
+}));
 
 describe("API integration", () => {
   let client: PGlite;
   let app: ReturnType<typeof createApp>;
   let users: UserModel;
   let refreshTokens: RefreshTokenModel;
+  let articles: ArticleModel;
 
   beforeEach(async () => {
     const testDatabase = await createTestDatabase();
     client = testDatabase.client;
-    const database = testDatabase.database as unknown as Database;
+    databaseState.current = testDatabase.database as unknown as Record<PropertyKey, unknown>;
+    const database = testDatabase.database as never;
 
     users = new UserModel(database);
-    refreshTokens = new RefreshTokenModel(database);
-    app = createApp(
-      new AuthService(users, refreshTokens, undefined, jwtSecret),
-      new ArticleService(new ArticleModel(database)),
-      jwtSecret,
-    );
+    refreshTokens = new RefreshTokenModel();
+    articles = new ArticleModel(database);
+
+    vi.spyOn(userModel, "create").mockImplementation((input) => users.create(input));
+    vi.spyOn(userModel, "findByEmail").mockImplementation((email) => users.findByEmail(email));
+    vi.spyOn(userModel, "findById").mockImplementation((id) => users.findById(id));
+    vi.spyOn(refreshTokenModel, "create").mockImplementation((input) => refreshTokens.create(input));
+    vi.spyOn(refreshTokenModel, "findByHash").mockImplementation((hash) => refreshTokens.findByHash(hash));
+    vi.spyOn(refreshTokenModel, "rotate").mockImplementation((...args) => refreshTokens.rotate(...args));
+    vi.spyOn(refreshTokenModel, "revokeFamily").mockImplementation((familyId) => refreshTokens.revokeFamily(familyId));
+    vi.spyOn(articleModel, "create").mockImplementation((input) => articles.create(input));
+    vi.spyOn(articleModel, "findByUserId").mockImplementation((userId) => articles.findByUserId(userId));
+    vi.spyOn(articleModel, "findById").mockImplementation((id) => articles.findById(id));
+    vi.spyOn(articleModel, "findByUrl").mockImplementation((url, userId) => articles.findByUrl(url, userId));
+    vi.spyOn(articleModel, "update").mockImplementation((id, userId, input) => articles.update(id, userId, input));
+    vi.spyOn(articleModel, "delete").mockImplementation((id, userId) => articles.delete(id, userId));
+
+    app = createApp();
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await client.close();
   });
 
