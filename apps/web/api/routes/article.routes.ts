@@ -1,7 +1,7 @@
 import { Router } from "express";
 
 import { createArticleController } from "../controller/article.controller.js";
-import { createAuthMiddleware } from "../middleware/auth.middleware.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 import { ArticleService } from "../service/article.service.js";
 
 export function createArticleRouter(
@@ -11,7 +11,7 @@ export function createArticleRouter(
   const router = Router();
   const controller = createArticleController(articleService);
 
-  router.use(createAuthMiddleware(jwtSecret));
+  router.use(requireAuth(jwtSecret));
   router.get("/", controller.list);
   router.post("/", controller.create);
   router.get("/by-url", controller.getByUrl);

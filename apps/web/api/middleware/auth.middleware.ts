@@ -3,7 +3,13 @@ import type { RequestHandler } from "express";
 import { AppError, HttpStatus } from "../errors/appError.js";
 import { verifyAccessToken } from "../utils/token.utils.js";
 
-export function createAuthMiddleware(secret?: Uint8Array): RequestHandler {
+/**
+ * Requires a valid Bearer access token and stores its user ID in `res.locals.userId`.
+ *
+ * @param secret Optional JWT signing secret used to verify the token.
+ * @returns Middleware that forwards a 401 error when the token is missing or invalid.
+ */
+export function requireAuth(secret?: Uint8Array): RequestHandler {
   return async (req, res, next) => {
     const authorization = req.header("authorization");
     const [scheme, token, ...extra] = authorization?.split(" ") ?? [];
