@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 
-import type { Database } from "../db/client.js";
+import { database, type Database } from "../db/client.js";
 import { users, type User } from "../schema/user.schema.js";
 
 export class UserModel {
@@ -36,3 +36,5 @@ export class UserModel {
     return user ?? null;
   }
 }
+
+export const userModel = new UserModel(database);

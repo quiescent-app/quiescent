@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Database } from "../db/client.js";
+import { database } from "../db/client.js";
 import { refreshTokens } from "../schema/refreshTokens.schema.js";
 
 export type RefreshTokenRecord = typeof refreshTokens.$inferSelect;
@@ -11,7 +11,6 @@ export interface RotatedRefreshToken extends Record<string, unknown> {
 }
 
 export class RefreshTokenModel {
-  constructor(private readonly database: Database) {}
 
   async create(input: {
     userId: string;
@@ -19,11 +18,11 @@ export class RefreshTokenModel {
     tokenHash: string;
     expiresAt: Date;
   }): Promise<void> {
-    await this.database.insert(refreshTokens).values(input);
+    await database.insert(refreshTokens).values(input);
   }
 
   async findByHash(tokenHash: string): Promise<RefreshTokenRecord | null> {
-    const [token] = await this.database
+    const [token] = await database
       .select()
       .from(refreshTokens)
       .where(eq(refreshTokens.tokenHash, tokenHash))
@@ -37,7 +36,7 @@ export class RefreshTokenModel {
     replacementHash: string,
     expiresAt: Date,
   ): Promise<RotatedRefreshToken | null> {
-    const result = await this.database.execute<RotatedRefreshToken>(sql`
+    const result = await database.execute<RotatedRefreshToken>(sql`
       WITH consumed AS (
         UPDATE refresh_tokens
         SET revoked_at = now()
@@ -58,7 +57,7 @@ export class RefreshTokenModel {
   }
 
   async revokeFamily(familyId: string): Promise<void> {
-    await this.database
+    await database
       .update(refreshTokens)
       .set({ revokedAt: new Date() })
       .where(
@@ -66,3 +65,5 @@ export class RefreshTokenModel {
       );
   }
 }
+
+export const refreshTokenModel = new RefreshTokenModel();
