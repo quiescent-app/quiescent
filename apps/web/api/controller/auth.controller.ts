@@ -1,28 +1,34 @@
 import type { RequestHandler } from "express";
 
 import { HttpStatus } from "../errors/appError.js";
-import { AuthService } from "../service/auth.service.js";
+import { authService } from "../service/auth.service.js";
 
-export function createAuthController(authService: AuthService) {
-  const signUp: RequestHandler = async (req, res) => {
-    const result = await authService.register(req.body);
+type Credentials = { email: string; password: string };
+
+export class AuthController {
+  readonly signUp: RequestHandler = async (req, res) => {
+    const { email, password } = req.body as Credentials;
+    const result = await authService.register({ email, password });
     res.status(HttpStatus.CREATED).json(result);
   };
 
-  const login: RequestHandler = async (req, res) => {
-    const result = await authService.login(req.body);
+  readonly login: RequestHandler = async (req, res) => {
+    const { email, password } = req.body as Credentials;
+    const result = await authService.login({ email, password });
     res.status(HttpStatus.OK).json(result);
   };
 
-  const refresh: RequestHandler = async (req, res) => {
-    const result = await authService.refresh(req.body.refreshToken);
+  readonly refresh: RequestHandler = async (req, res) => {
+    const { refreshToken } = req.body as { refreshToken: string };
+    const result = await authService.refresh(refreshToken);
     res.status(HttpStatus.OK).json(result);
   };
 
-  const logout: RequestHandler = async (req, res) => {
-    await authService.logout(req.body?.refreshToken);
+  readonly logout: RequestHandler = async (req, res) => {
+    const { refreshToken } = req.body as { refreshToken?: string };
+    await authService.logout(refreshToken);
     res.status(HttpStatus.NO_CONTENT).end();
   };
-
-  return { signUp, login, refresh, logout };
 }
+
+export const authController = new AuthController();

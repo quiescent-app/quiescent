@@ -1,11 +1,11 @@
 import { Router, type RequestHandler } from "express";
 
-import { createAuthController } from "../controller/auth.controller.js";
+import { authController } from "../controller/auth.controller.js";
 import { AppError, HttpStatus } from "../errors/appError.js";
-import { AuthService } from "../service/auth.service.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** Ensures a request payload is a JSON object before checking its fields. */
 function requireObjectBody(body: unknown): Record<string, unknown> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     throw new AppError(HttpStatus.BAD_REQUEST, "Request body must be a JSON object");
@@ -13,6 +13,7 @@ function requireObjectBody(body: unknown): Record<string, unknown> {
   return body as Record<string, unknown>;
 }
 
+/** Validates credentials, trims the email, and passes only accepted fields downstream. */
 const requireCredentials: RequestHandler = (req, _res, next) => {
   const values = requireObjectBody(req.body);
   const email = values["email"];
@@ -29,6 +30,7 @@ const requireCredentials: RequestHandler = (req, _res, next) => {
   next();
 };
 
+/** Requires a non-empty refresh token and passes a normalized body to the controller. */
 const requireRefreshToken: RequestHandler = (req, _res, next) => {
   const values = requireObjectBody(req.body);
   const refreshToken = values["refreshToken"];
@@ -40,6 +42,7 @@ const requireRefreshToken: RequestHandler = (req, _res, next) => {
   next();
 };
 
+/** Allows logout without a token and validates it when provided. */
 const requireLogoutRefreshToken: RequestHandler = (req, _res, next) => {
   const values = requireObjectBody(req.body ?? {});
   const refreshToken = values["refreshToken"];
@@ -50,15 +53,11 @@ const requireLogoutRefreshToken: RequestHandler = (req, _res, next) => {
   req.body = { refreshToken };
   next();
 };
+const router = Router();
 
-export function createAuthRouter(authService: AuthService): Router {
-  const router = Router();
-  const controller = createAuthController(authService);
+router.post("/sign-up", requireCredentials, authController.signUp);
+router.post("/login", requireCredentials, authController.login);
+router.post("/refresh", requireRefreshToken, authController.refresh);
+router.post("/logout", requireLogoutRefreshToken, authController.logout);
 
-  router.post("/sign-up", requireCredentials, controller.signUp);
-  router.post("/login", requireCredentials, controller.login);
-  router.post("/refresh", requireRefreshToken, controller.refresh);
-  router.post("/logout", requireLogoutRefreshToken, controller.logout);
-
-  return router;
-}
+export default router;
