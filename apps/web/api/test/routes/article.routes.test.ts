@@ -2,9 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
 import { AppError, HttpStatus } from "../../errors/appError.js";
+import { createApp } from "../../app.js";
 import { articleService } from "../../service/article.service.js";
 import { createAccessToken } from "../../utils/token.utils.js";
-import { createTestApp } from "../helpers/createTestApp.js";
 
 const userId = "00000000-0000-4000-8000-000000000001";
 const article = {
@@ -73,7 +73,7 @@ describe("article routes", () => {
     vi.spyOn(articleService, "deleteArticle").mockImplementation(
       service.deleteArticle as typeof articleService.deleteArticle,
     );
-    const app = createTestApp();
+    const app = createApp();
     const methodName = method.toLowerCase() as "get" | "post" | "patch" | "delete";
     let test = request(app)[methodName](path);
     if (body !== undefined && body !== null) test = test.send(body as object | string);
