@@ -33,7 +33,7 @@ describe("RefreshTokenModel", () => {
     client = testDatabase.client;
     databaseState.current = testDatabase.database as unknown as Record<PropertyKey, unknown>;
     model = new RefreshTokenModel();
-    users = new UserModel(testDatabase.database as never);
+    users = new UserModel();
   });
 
   afterEach(async () => {
