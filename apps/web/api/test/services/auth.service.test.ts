@@ -1,20 +1,21 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { NeonDbError } from "@neondatabase/serverless";
 
 import {
-  AuthService,
+  authService,
   EmailAlreadyExistsError,
   InvalidCredentialsError,
   InvalidPasswordError,
   InvalidRefreshTokenError,
   type PasswordHasher,
 } from "../../service/auth.service.js";
-import { RefreshTokenModel } from "../../model/refreshToken.model.js";
-import { UserModel } from "../../model/user.model.js";
+import { refreshTokenModel } from "../../model/refreshToken.model.js";
+import { userModel } from "../../model/user.model.js";
 import type { User } from "../../schema/user.schema.js";
 import { hashRefreshToken } from "../../utils/token.utils.js";
 
-const jwtSecret = new TextEncoder().encode("test-secret-that-is-at-least-32-bytes");
+const serviceWithHasher = authService as unknown as { passwordHasher: PasswordHasher };
+const originalPasswordHasher = serviceWithHasher.passwordHasher;
 
 function makeUser(overrides: Partial<User> = {}): User {
   return {
@@ -33,28 +34,28 @@ function makeAuthService(user = makeUser()) {
     verify: vi.fn(async (hash, password) => hash === `hashed:${password}`),
   };
   const users = {
-    create: vi.fn<UserModel["create"]>(async () => user),
-    findByEmail: vi.fn<UserModel["findByEmail"]>(async () => user),
-    findById: vi.fn<UserModel["findById"]>(async () => user),
+    create: vi.spyOn(userModel, "create").mockResolvedValue(user),
+    findByEmail: vi.spyOn(userModel, "findByEmail").mockResolvedValue(user),
+    findById: vi.spyOn(userModel, "findById").mockResolvedValue(user),
   };
   const refreshTokens = {
-    create: vi.fn<RefreshTokenModel["create"]>(async () => undefined),
-    findByHash: vi.fn<RefreshTokenModel["findByHash"]>(async () => null),
-    rotate: vi.fn<RefreshTokenModel["rotate"]>(async () => ({
+    create: vi.spyOn(refreshTokenModel, "create").mockResolvedValue(undefined),
+    findByHash: vi.spyOn(refreshTokenModel, "findByHash").mockResolvedValue(null),
+    rotate: vi.spyOn(refreshTokenModel, "rotate").mockResolvedValue({
       userId: user.id,
       familyId: "family-id",
-    })),
-    revokeFamily: vi.fn<RefreshTokenModel["revokeFamily"]>(async () => undefined),
+    }),
+    revokeFamily: vi.spyOn(refreshTokenModel, "revokeFamily").mockResolvedValue(undefined),
   };
-  const service = new AuthService(
-    users as unknown as UserModel,
-    refreshTokens as unknown as RefreshTokenModel,
-    passwordHasher,
-    jwtSecret,
-  );
+  serviceWithHasher.passwordHasher = passwordHasher;
 
-  return { service, user, passwordHasher, users, refreshTokens };
+  return { service: authService, user, passwordHasher, users, refreshTokens };
 }
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  serviceWithHasher.passwordHasher = originalPasswordHasher;
+});
 
 describe("AuthService", () => {
   it("registers a user and returns tokens with a safe user record", async () => {
@@ -161,18 +162,19 @@ describe("AuthService", () => {
 
   it("issues different tokens to different users", async () => {
     const firstUser = makeAuthService(makeUser());
-    const secondUser = makeAuthService(
-      makeUser({
-        id: "00000000-0000-4000-8000-000000000002",
-        email: "another-reader@example.com",
-      }),
+    const secondUser = makeUser({
+      id: "00000000-0000-4000-8000-000000000002",
+      email: "another-reader@example.com",
+    });
+    firstUser.users.findByEmail.mockImplementation(async (email) =>
+      email === secondUser.email ? secondUser : firstUser.user,
     );
 
     const firstResult = await firstUser.service.login({
       email: "reader@example.com",
       password: "correct-password",
     });
-    const secondResult = await secondUser.service.login({
+    const secondResult = await firstUser.service.login({
       email: "another-reader@example.com",
       password: "correct-password",
     });
