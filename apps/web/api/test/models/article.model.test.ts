@@ -1,10 +1,28 @@
 import { PGlite } from "@electric-sql/pglite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArticleModel } from "../../model/article.model.js";
 import { UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
 import type { Database } from "../../db/client.js";
+
+const databaseState = vi.hoisted(() => ({
+  current: undefined as Record<PropertyKey, unknown> | undefined,
+}));
+
+vi.mock("../../db/client.js", () => ({
+  database: new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const current = databaseState.current;
+        if (!current) throw new Error("Test database has not been initialized");
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === "function" ? value.bind(current) : value;
+      },
+    },
+  ),
+}));
 
 describe("ArticleModel", () => {
   let client: PGlite;
@@ -22,7 +40,8 @@ describe("ArticleModel", () => {
       testDatabase.database as unknown as Database,
     );
 
-    userModel = new UserModel(testDatabase.database as unknown as Database);
+    databaseState.current = testDatabase.database as unknown as Record<PropertyKey, unknown>;
+    userModel = new UserModel();
 
     const user = await userModel.create({
       email: "test@example.com",
@@ -40,6 +59,7 @@ describe("ArticleModel", () => {
 
   afterEach(async () => {
     await client?.close();
+    databaseState.current = undefined;
   });
 
   const articleInput = {

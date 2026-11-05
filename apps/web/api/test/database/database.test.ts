@@ -32,7 +32,7 @@ describe("getDatabaseUrl", () => {
 });
 
 describe("Neon database health", () => {
-  it.skipIf(!process.env.DATABASE_URL)(
+  it(
     "connects to the configured database and runs a health query",
     async () => {
       const sql = neon(getDatabaseUrl());

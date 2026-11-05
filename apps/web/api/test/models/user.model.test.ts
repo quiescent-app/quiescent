@@ -1,10 +1,27 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { sql } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Database } from "../../db/client.js";
 import { UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
+
+const databaseState = vi.hoisted(() => ({
+  current: undefined as Record<PropertyKey, unknown> | undefined,
+}));
+
+vi.mock("../../db/client.js", () => ({
+  database: new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const current = databaseState.current;
+        if (!current) throw new Error("Test database has not been initialized");
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === "function" ? value.bind(current) : value;
+      },
+    },
+  ),
+}));
 
 describe("UserModel", () => {
   let client: PGlite;
@@ -13,11 +30,13 @@ describe("UserModel", () => {
 
   beforeEach(async () => {
     ({ client, database } = await createTestDatabase());
-    model = new UserModel(database as unknown as Database);
+    databaseState.current = database as unknown as Record<PropertyKey, unknown>;
+    model = new UserModel();
   });
 
   afterEach(async () => {
     if (client) await client.close();
+    databaseState.current = undefined;
   });
 
   it("creates and returns a user with database-generated fields", async () => {

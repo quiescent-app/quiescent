@@ -1,10 +1,27 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Database } from "../../db/client.js";
 import { RefreshTokenModel } from "../../model/refreshToken.model.js";
 import { UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
+
+const databaseState = vi.hoisted(() => ({
+  current: undefined as Record<PropertyKey, unknown> | undefined,
+}));
+
+vi.mock("../../db/client.js", () => ({
+  database: new Proxy(
+    {},
+    {
+      get(_target, property) {
+        const current = databaseState.current;
+        if (!current) throw new Error("Test database has not been initialized");
+        const value = Reflect.get(current, property, current) as unknown;
+        return typeof value === "function" ? value.bind(current) : value;
+      },
+    },
+  ),
+}));
 
 describe("RefreshTokenModel", () => {
   let client: PGlite;
@@ -14,9 +31,9 @@ describe("RefreshTokenModel", () => {
   beforeEach(async () => {
     const testDatabase = await createTestDatabase();
     client = testDatabase.client;
-    const database = testDatabase.database as unknown as Database;
-    model = new RefreshTokenModel(database);
-    users = new UserModel(database);
+    databaseState.current = testDatabase.database as unknown as Record<PropertyKey, unknown>;
+    model = new RefreshTokenModel();
+    users = new UserModel();
   });
 
   afterEach(async () => {
