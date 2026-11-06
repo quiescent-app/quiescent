@@ -3,7 +3,15 @@ import { Router, type RequestHandler } from "express";
 import { articleController } from "../controller/article.controller.js";
 import { AppError, HttpStatus } from "../errors/appError.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
-import { requireArticleId, requireObjectBody } from "../utils/article.validation.js";
+
+const UUID_PATTERN = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/i;
+
+function requireObjectBody(body: unknown): Record<string, unknown> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Request body must be a JSON object");
+  }
+  return body as Record<string, unknown>;
+}
 
 const requireCreateArticle: RequestHandler = (req, _res, next) => {
   const values = requireObjectBody(req.body);
@@ -32,7 +40,10 @@ const requireArticleUrl: RequestHandler = (req, _res, next) => {
 };
 
 const requireValidArticleId: RequestHandler = (req, _res, next) => {
-  requireArticleId(req.params["id"]);
+  const id = req.params["id"];
+  if (typeof id !== "string" || !UUID_PATTERN.test(id)) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Article ID must be a valid UUID");
+  }
   next();
 };
 
