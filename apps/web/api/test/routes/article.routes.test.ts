@@ -1,204 +1,158 @@
+import type { RequestHandler } from "express";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 
-import { AppError, HttpStatus } from "../../errors/appError.js";
 import { createApp } from "../../app.js";
-import { articleService } from "../../service/article.service.js";
+import { HttpStatus } from "../../errors/appError.js";
 import { createAccessToken } from "../../utils/token.utils.js";
 
-const userId = "00000000-0000-4000-8000-000000000001";
-const article = {
-  id: "00000000-0000-4000-8000-000000000002",
-  userId,
-  title: "Example article",
-  url: "https://example.com/article",
-  domain: "example.com",
-  content: null,
-  readingProgress: 0,
-  lastAccessedAt: new Date("2026-01-01T00:00:00.000Z"),
-  createdAt: new Date("2026-01-01T00:00:00.000Z"),
-  updatedAt: new Date("2026-01-01T00:00:00.000Z"),
-  completedAt: null,
-};
-const articleResponse = {
-  ...article,
-  lastAccessedAt: article.lastAccessedAt.toISOString(),
-  createdAt: article.createdAt.toISOString(),
-  updatedAt: article.updatedAt.toISOString(),
-};
-const jwtSecret = new TextEncoder().encode("test-secret-that-is-at-least-32-bytes");
+const articleId = "00000000-0000-4000-8000-000000000002";
 
-function makeArticleService() {
+const { articleControllerMock } = vi.hoisted(() => {
+  function respond(status: number, body?: unknown): RequestHandler {
+    return (_req, res) => {
+      if (body === undefined) res.status(status).end();
+      else res.status(status).json(body);
+    };
+  }
+
   return {
-    createArticle: vi.fn(async () => article),
-    getArticles: vi.fn(async () => [article]),
-    getArticleById: vi.fn(async (): Promise<typeof article | null> => article),
-    getArticleByUrl: vi.fn(async () => article),
-    updateArticle: vi.fn(async () => ({ ...article, readingProgress: 50 })),
-    deleteArticle: vi.fn(async () => true),
+    articleControllerMock: {
+      create: vi.fn<RequestHandler>(respond(201, { id: "article-id" })),
+      list: vi.fn<RequestHandler>(respond(200, [{ id: "article-id" }])),
+      getById: vi.fn<RequestHandler>(respond(200, { id: "article-id" })),
+      getByUrl: vi.fn<RequestHandler>(respond(200, { id: "article-id" })),
+      updateProgress: vi.fn<RequestHandler>(respond(200, { readingProgress: 50 })),
+      remove: vi.fn<RequestHandler>(respond(204)),
+    },
   };
-}
+});
+
+vi.mock("../../controller/article.controller.js", () => ({
+  articleController: articleControllerMock,
+}));
 
 describe("article routes", () => {
   let accessToken: string;
 
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    accessToken = await createAccessToken("00000000-0000-4000-8000-000000000001");
+  });
   afterEach(() => vi.restoreAllMocks());
 
-  beforeEach(async () => {
-    accessToken = await createAccessToken(userId, jwtSecret);
-  });
-
-  async function send(
-    service: ReturnType<typeof makeArticleService>,
-    method: string,
-    path: string,
-    body?: unknown,
-    token: string | null = accessToken,
-  ): Promise<request.Response> {
-    vi.spyOn(articleService, "createArticle").mockImplementation(
-      service.createArticle as typeof articleService.createArticle,
-    );
-    vi.spyOn(articleService, "getArticles").mockImplementation(
-      service.getArticles as typeof articleService.getArticles,
-    );
-    vi.spyOn(articleService, "getArticleById").mockImplementation(
-      service.getArticleById as typeof articleService.getArticleById,
-    );
-    vi.spyOn(articleService, "getArticleByUrl").mockImplementation(
-      service.getArticleByUrl as typeof articleService.getArticleByUrl,
-    );
-    vi.spyOn(articleService, "updateArticle").mockImplementation(
-      service.updateArticle as typeof articleService.updateArticle,
-    );
-    vi.spyOn(articleService, "deleteArticle").mockImplementation(
-      service.deleteArticle as typeof articleService.deleteArticle,
-    );
-    const app = createApp();
-    const methodName = method.toLowerCase() as "get" | "post" | "patch" | "delete";
-    let test = request(app)[methodName](path);
-    if (body !== undefined && body !== null) test = test.send(body as object | string);
-    if (token) test = test.set("Authorization", `Bearer ${token}`);
+  function send(method: "get" | "post" | "patch" | "delete", path: string, body?: unknown) {
+    let test = request(createApp())[method](path);
+    test = test.set("Authorization", `Bearer ${accessToken}`);
+    if (body !== undefined) test = test.send(body as object | string);
     return test;
   }
 
-  it("should return 401 when a request omits its access token", async () => {
-    const response = await send(makeArticleService(), "GET", "/articles", undefined, null);
+  it("should require authentication before dispatching to a controller with status code 401", async () => {
+    const response = await request(createApp()).get("/articles");
 
     expect(response.status).toBe(HttpStatus.UNAUTHORIZED);
     expect(response.body).toEqual({ error: { message: "Authentication required" } });
+    expect(articleControllerMock.list).not.toHaveBeenCalled();
   });
 
-  it("should return 201 and create an article for the authenticated user", async () => {
-    const service = makeArticleService();
-    const response = await send(service, "POST", "/articles", {
+  it("should dispatch GET /articles to the list controller with status code 200", async () => {
+    const response = await send("get", "/articles");
+
+    expect(response.status).toBe(HttpStatus.OK);
+    expect(articleControllerMock.list).toHaveBeenCalledOnce();
+  });
+
+  it("should dispatch POST /articles to the create controller with status code 201", async () => {
+    const response = await send("post", "/articles", {
       title: "Example article",
-      url: "https://example.com/article",
+      url: "https://example.com",
     });
 
     expect(response.status).toBe(HttpStatus.CREATED);
-    expect(response.body).toEqual(articleResponse);
-    expect(service.createArticle).toHaveBeenCalledWith(userId, {
-      title: "Example article",
-      url: "https://example.com/article",
-      content: undefined,
-    });
+    expect(articleControllerMock.create).toHaveBeenCalledOnce();
   });
 
-  it("should return 400 when article creation has an invalid payload", async () => {
-    const response = await send(makeArticleService(), "POST", "/articles", {
+  it("should dispatch GET /articles/by-url to the getByUrl controller with status code 200", async () => {
+    const response = await send("get", "/articles/by-url?url=https%3A%2F%2Fexample.com");
+
+    expect(response.status).toBe(HttpStatus.OK);
+    expect(articleControllerMock.getByUrl).toHaveBeenCalledOnce();
+  });
+
+  it("should dispatch GET /articles/:id to the getById controller with status code 200", async () => {
+    const response = await send("get", `/articles/${articleId}`);
+
+    expect(response.status).toBe(HttpStatus.OK);
+    expect(articleControllerMock.getById).toHaveBeenCalledOnce();
+  });
+
+  it("should dispatch PATCH /articles/:id to the updateProgress controller with status code 200", async () => {
+    const response = await send("patch", `/articles/${articleId}`, { readingProgress: 50 });
+
+    expect(response.status).toBe(HttpStatus.OK);
+    expect(articleControllerMock.updateProgress).toHaveBeenCalledOnce();
+  });
+
+  it("should dispatch DELETE /articles/:id to the remove controller with status code 204", async () => {
+    const response = await send("delete", `/articles/${articleId}`);
+
+    expect(response.status).toBe(HttpStatus.NO_CONTENT);
+    expect(articleControllerMock.remove).toHaveBeenCalledOnce();
+  });
+
+  it("should reject a blank article title before dispatching with status code 400", async () => {
+    const response = await send("post", "/articles", {
       title: " ",
-      url: "https://example.com/article",
+      url: "https://example.com",
     });
 
     expect(response.status).toBe(HttpStatus.BAD_REQUEST);
     expect(response.body).toEqual({ error: { message: "Article title is required" } });
+    expect(articleControllerMock.create).not.toHaveBeenCalled();
   });
 
-  it("should return 409 when the authenticated user submits a duplicate article", async () => {
-    const service = makeArticleService();
-    service.createArticle.mockRejectedValue(
-      new AppError(HttpStatus.CONFLICT, "Article already exists"),
-    );
-    const response = await send(service, "POST", "/articles", {
-      title: article.title,
-      url: article.url,
-    });
+  it("should reject a blank article URL before dispatching with status code 400", async () => {
+    const response = await send("post", "/articles", { title: "Title", url: " " });
 
-    expect(response.status).toBe(HttpStatus.CONFLICT);
-    expect(response.body).toEqual({ error: { message: "Article already exists" } });
+    expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(response.body).toEqual({ error: { message: "Article URL is required" } });
+    expect(articleControllerMock.create).not.toHaveBeenCalled();
   });
 
-  it("should return 200 with only the authenticated user's articles", async () => {
-    const service = makeArticleService();
-    const response = await send(service, "GET", "/articles");
-
-    expect(response.status).toBe(HttpStatus.OK);
-    expect(response.body).toEqual([articleResponse]);
-    expect(service.getArticles).toHaveBeenCalledWith(userId);
-  });
-
-  it("should return 200 when retrieving an article by ID or URL", async () => {
-    const service = makeArticleService();
-    const byId = await send(service, "GET", `/articles/${article.id}`);
-    const byUrl = await send(
-      service,
-      "GET",
-      `/articles/by-url?url=${encodeURIComponent(article.url)}`,
-    );
-
-    expect(byId.status).toBe(HttpStatus.OK);
-    expect(byId.body).toEqual(articleResponse);
-    expect(service.getArticleById).toHaveBeenCalledWith(article.id, userId);
-    expect(byUrl.status).toBe(HttpStatus.OK);
-    expect(byUrl.body).toEqual(articleResponse);
-    expect(service.getArticleByUrl).toHaveBeenCalledWith(article.url, userId);
-  });
-
-  it("should return 404 when an article does not exist or belongs to another user", async () => {
-    const service = makeArticleService();
-    service.getArticleById.mockResolvedValue(null);
-    const response = await send(service, "GET", `/articles/${article.id}`);
-
-    expect(response.status).toBe(HttpStatus.NOT_FOUND);
-    expect(response.body).toEqual({ error: { message: "Article not found" } });
-  });
-
-  it("should return 200 when updating reading progress", async () => {
-    const service = makeArticleService();
-    const response = await send(service, "PATCH", `/articles/${article.id}`, {
-      readingProgress: 50,
-    });
-
-    expect(response.status).toBe(HttpStatus.OK);
-    expect(response.body).toEqual({ ...articleResponse, readingProgress: 50 });
-    expect(service.updateArticle).toHaveBeenCalledWith(article.id, userId, {
-      readingProgress: 50,
-    });
-  });
-
-  it("should return 400 when reading progress is outside the valid range", async () => {
-    const service = makeArticleService();
-    service.updateArticle.mockRejectedValue(
-      new AppError(
-        HttpStatus.BAD_REQUEST,
-        "Reading progress must be an integer between 0 and 100",
-      ),
-    );
-    const response = await send(service, "PATCH", `/articles/${article.id}`, {
-      readingProgress: 101,
+  it("should reject non-string article content before dispatching with status code 400", async () => {
+    const response = await send("post", "/articles", {
+      title: "Title",
+      url: "https://example.com",
+      content: 5,
     });
 
     expect(response.status).toBe(HttpStatus.BAD_REQUEST);
-    expect(response.body).toEqual({
-      error: { message: "Reading progress must be an integer between 0 and 100" },
-    });
+    expect(response.body).toEqual({ error: { message: "Article content must be a string" } });
+    expect(articleControllerMock.create).not.toHaveBeenCalled();
   });
 
-  it("should return 204 after deleting an article owned by the authenticated user", async () => {
-    const service = makeArticleService();
-    const response = await send(service, "DELETE", `/articles/${article.id}`);
+  it("should reject a missing URL query before dispatching with status code 400", async () => {
+    const response = await send("get", "/articles/by-url");
 
-    expect(response.status).toBe(HttpStatus.NO_CONTENT);
-    expect(service.deleteArticle).toHaveBeenCalledWith(article.id, userId);
+    expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(response.body).toEqual({ error: { message: "Article URL query parameter is required" } });
+    expect(articleControllerMock.getByUrl).not.toHaveBeenCalled();
+  });
+
+  it("should reject an invalid article ID before dispatching with status code 400", async () => {
+    const response = await send("get", "/articles/not-a-uuid");
+
+    expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(response.body).toEqual({ error: { message: "Article ID must be a valid UUID" } });
+    expect(articleControllerMock.getById).not.toHaveBeenCalled();
+  });
+
+  it("should reject non-number reading progress before dispatching with status code 400", async () => {
+    const response = await send("patch", `/articles/${articleId}`, { readingProgress: "50" });
+
+    expect(response.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(response.body).toEqual({ error: { message: "Reading progress must be a number" } });
+    expect(articleControllerMock.updateProgress).not.toHaveBeenCalled();
   });
 });

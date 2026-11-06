@@ -1,27 +1,16 @@
 import type { RequestHandler } from "express";
 
 import { AppError, HttpStatus } from "../errors/appError.js";
-import {
-  requireArticleId,
-  requireObjectBody,
-} from "../utils/article.validation.js";
 
 import { articleService } from "../service/article.service.js";
 
 export class ArticleController {
   readonly create: RequestHandler = async (req, res) => {
-    const body = requireObjectBody(req.body);
-    const { title, url, content } = body;
-
-    if (typeof title !== "string" || !title.trim()) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Article title is required");
-    }
-    if (typeof url !== "string" || !url.trim()) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Article URL is required");
-    }
-    if (content !== undefined && typeof content !== "string") {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Article content must be a string");
-    }
+    const { title, url, content } = req.body as {
+      title: string;
+      url: string;
+      content?: string;
+    };
 
     const article = await articleService.createArticle(res.locals.userId, {
       title,
@@ -38,7 +27,7 @@ export class ArticleController {
 
   readonly getById: RequestHandler = async (req, res) => {
     const article = await articleService.getArticleById(
-      requireArticleId(req.params["id"]),
+      req.params["id"] as string,
       res.locals.userId,
     );
     if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
@@ -46,10 +35,7 @@ export class ArticleController {
   };
 
   readonly getByUrl: RequestHandler = async (req, res) => {
-    const url = req.query["url"];
-    if (typeof url !== "string" || !url.trim()) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Article URL query parameter is required");
-    }
+    const url = req.query["url"] as string;
 
     const article = await articleService.getArticleByUrl(url, res.locals.userId);
     if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
@@ -57,15 +43,12 @@ export class ArticleController {
   };
 
   readonly updateProgress: RequestHandler = async (req, res) => {
-    const body = requireObjectBody(req.body);
-    if (typeof body.readingProgress !== "number") {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Reading progress must be a number");
-    }
+    const { readingProgress } = req.body as { readingProgress: number };
 
     const article = await articleService.updateArticle(
-      requireArticleId(req.params["id"]),
+      req.params["id"] as string,
       res.locals.userId,
-      { readingProgress: body.readingProgress },
+      { readingProgress },
     );
     if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
     res.status(HttpStatus.OK).json(article);
@@ -73,7 +56,7 @@ export class ArticleController {
 
   readonly remove: RequestHandler = async (req, res) => {
     const deleted = await articleService.deleteArticle(
-      requireArticleId(req.params["id"]),
+      req.params["id"] as string,
       res.locals.userId,
     );
     if (!deleted) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
