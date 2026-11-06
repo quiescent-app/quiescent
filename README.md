@@ -27,6 +27,15 @@ make db-migrate
 Start the API with `pnpm --filter @quiescent/api start` (optional `PORT`,
 default `3000`).
 
+Start the web UI and API together from the repository root:
+
+```bash
+make dev
+```
+
+The UI runs through Vite with hot module replacement, and the API restarts when
+its source files change. The API uses the optional `PORT` setting (default
+`3000`).
 Environment files and database credentials are ignored by Git. Never expose
 `DATABASE_URL` to the web or extension clients.
 
