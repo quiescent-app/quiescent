@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { articleController } from "../../controller/article.controller.js";
-import { HttpStatus } from "../../errors/appError.js";
+import { AppError, HttpStatus } from "../../errors/appError.js";
 import { articleService } from "../../service/article.service.js";
 
 const userId = "00000000-0000-4000-8000-000000000001";
@@ -51,7 +51,6 @@ describe("ArticleController", () => {
     await articleController.create(
       makeRequest({ body: { title: "Example article", url: "https://example.com/article" } }),
       response,
-      vi.fn(),
     );
 
     expect(create).toHaveBeenCalledWith(userId, {
@@ -67,7 +66,7 @@ describe("ArticleController", () => {
     const getArticles = vi.spyOn(articleService, "getArticles").mockResolvedValue([article]);
     const response = makeResponse();
 
-    await articleController.list(makeRequest(), response, vi.fn());
+    await articleController.list(makeRequest(), response);
 
     expect(getArticles).toHaveBeenCalledWith(userId);
     expect(response.status).toHaveBeenCalledWith(HttpStatus.OK);
@@ -80,11 +79,10 @@ describe("ArticleController", () => {
     const idResponse = makeResponse();
     const urlResponse = makeResponse();
 
-    await articleController.getById(makeRequest({ params: { id: article.id } }), idResponse, vi.fn());
+    await articleController.getById(makeRequest({ params: { id: article.id } }), idResponse);
     await articleController.getByUrl(
       makeRequest({ query: { url: article.url } }),
       urlResponse,
-      vi.fn(),
     );
 
     expect(byId).toHaveBeenCalledWith(article.id, userId);
@@ -94,15 +92,6 @@ describe("ArticleController", () => {
     expect(urlResponse.status).toHaveBeenCalledWith(HttpStatus.OK);
     expect(urlResponse.json).toHaveBeenCalledWith(article);
   });
-
-  it("should return not found when an article lookup has no result with status code 404", async () => {
-    vi.spyOn(articleService, "getArticleById").mockResolvedValue(null);
-
-    await expect(
-      articleController.getById(makeRequest({ params: { id: article.id } }), makeResponse(), vi.fn()),
-    ).rejects.toMatchObject({ statusCode: HttpStatus.NOT_FOUND, message: "Article not found" });
-  });
-
   it("should update reading progress for the authenticated user with status code 200", async () => {
     const updated = { ...article, readingProgress: 50 };
     const update = vi.spyOn(articleService, "updateArticle").mockResolvedValue(updated);
@@ -111,7 +100,6 @@ describe("ArticleController", () => {
     await articleController.updateProgress(
       makeRequest({ params: { id: article.id }, body: { readingProgress: 50 } }),
       response,
-      vi.fn(),
     );
 
     expect(update).toHaveBeenCalledWith(article.id, userId, { readingProgress: 50 });
@@ -123,23 +111,172 @@ describe("ArticleController", () => {
     const remove = vi.spyOn(articleService, "deleteArticle").mockResolvedValue(true);
     const response = makeResponse();
 
-    await articleController.remove(makeRequest({ params: { id: article.id } }), response, vi.fn());
+    await articleController.remove(makeRequest({ params: { id: article.id } }), response);
 
     expect(remove).toHaveBeenCalledWith(article.id, userId);
     expect(response.status).toHaveBeenCalledWith(HttpStatus.NO_CONTENT);
     expect(response.end).toHaveBeenCalledOnce();
   });
 
-  it("should return with status code 404 when deleting a non-existent article", async () => {
-    const remove = vi.spyOn(articleService, "deleteArticle").mockResolvedValue(false);
+  it("should propagate the service error from create with status code 409", async () => {
+    const error = new AppError(HttpStatus.CONFLICT, "Article already exists");
+    const serviceCall = vi.spyOn(articleService, "createArticle").mockRejectedValue(error);
+    const response = makeResponse();
 
     await expect(
-      articleController.remove(makeRequest({ params: { id: article.id } }), makeResponse(), vi.fn()),
-    ).rejects.toMatchObject({
-      statusCode: HttpStatus.NOT_FOUND,
-      message: "Article not found",
-    });
+      articleController.create(
+        makeRequest({ body: { title: article.title, url: article.url } }),
+        response,
+      ),
+    ).rejects.toBe(error);
 
-    expect(remove).toHaveBeenCalledWith(article.id, userId);
+    expect(serviceCall).toHaveBeenCalledWith(userId, { title: article.title, url: article.url, content: undefined });
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from list with status code 500", async () => {
+    const error = new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Service failed");
+    const serviceCall = vi.spyOn(articleService, "getArticles").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.list(
+        makeRequest(),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from getById with status code 404", async () => {
+    const error = new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    const serviceCall = vi.spyOn(articleService, "getArticleById").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.getById(
+        makeRequest({ params: { id: article.id } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.id, userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from getById with status code 403", async () => {
+    const error = new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
+    const serviceCall = vi.spyOn(articleService, "getArticleById").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.getById(
+        makeRequest({ params: { id: article.id } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.id, userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from getByUrl with status code 404", async () => {
+    const error = new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    const serviceCall = vi.spyOn(articleService, "getArticleByUrl").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.getByUrl(
+        makeRequest({ query: { url: article.url } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.url, userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from getByUrl with status code 403", async () => {
+    const error = new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
+    const serviceCall = vi.spyOn(articleService, "getArticleByUrl").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.getByUrl(
+        makeRequest({ query: { url: article.url } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.url, userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from updateProgress with status code 400", async () => {
+    const error = new AppError(HttpStatus.BAD_REQUEST, "Reading progress must be an integer between 0 and 100");
+    const serviceCall = vi.spyOn(articleService, "updateArticle").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.updateProgress(
+        makeRequest({ params: { id: article.id }, body: { readingProgress: 150 } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.id, userId, { readingProgress: 150 });
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from updateProgress with status code 404", async () => {
+    const error = new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    const serviceCall = vi.spyOn(articleService, "updateArticle").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.updateProgress(
+        makeRequest({ params: { id: article.id }, body: { readingProgress: 50 } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.id, userId, { readingProgress: 50 });
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
+  });
+
+  it("should propagate the service error from remove with status code 404", async () => {
+    const error = new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    const serviceCall = vi.spyOn(articleService, "deleteArticle").mockRejectedValue(error);
+    const response = makeResponse();
+
+    await expect(
+      articleController.remove(
+        makeRequest({ params: { id: article.id } }),
+        response,
+      ),
+    ).rejects.toBe(error);
+
+    expect(serviceCall).toHaveBeenCalledWith(article.id, userId);
+    expect(response.status).not.toHaveBeenCalled();
+    expect(response.json).not.toHaveBeenCalled();
+    expect(response.end).not.toHaveBeenCalled();
   });
 });

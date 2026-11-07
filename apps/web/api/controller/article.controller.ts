@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError, HttpStatus } from "../errors/appError.js";
+import { HttpStatus } from "../errors/appError.js";
 
 import { articleService } from "../service/article.service.js";
 
@@ -30,7 +30,6 @@ export class ArticleController {
       req.params["id"] as string,
       res.locals.userId,
     );
-    if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
     res.status(HttpStatus.OK).json(article);
   }
 
@@ -38,7 +37,6 @@ export class ArticleController {
     const url = req.query["url"] as string;
 
     const article = await articleService.getArticleByUrl(url, res.locals.userId);
-    if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
     res.status(HttpStatus.OK).json(article);
   }
 
@@ -50,16 +48,14 @@ export class ArticleController {
       res.locals.userId,
       { readingProgress },
     );
-    if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
     res.status(HttpStatus.OK).json(article);
   }
 
   async remove(req: Request, res: Response): Promise<void> {
-    const deleted = await articleService.deleteArticle(
+    await articleService.deleteArticle(
       req.params["id"] as string,
       res.locals.userId,
     );
-    if (!deleted) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
     res.status(HttpStatus.NO_CONTENT).end();
   }
 }
