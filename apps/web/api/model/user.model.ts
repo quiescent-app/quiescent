@@ -1,13 +1,12 @@
 import { eq } from "drizzle-orm";
 
-import { database, type Database } from "../db/client.js";
+import { database } from "../db/client.js";
 import { users, type User } from "../schema/user.schema.js";
 
 export class UserModel {
-  constructor(private readonly db: Database = database) {}
 
   async create(input: { email: string; password: string }): Promise<User> {
-    const [user] = await this.db
+    const [user] = await database
       .insert(users)
       .values({ email: input.email, password: input.password })
       .returning();
@@ -17,7 +16,7 @@ export class UserModel {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    const [user] = await this.db
+    const [user] = await database
       .select()
       .from(users)
       .where(eq(users.email, email))
@@ -27,7 +26,7 @@ export class UserModel {
   }
 
   async findById(id: string): Promise<User | null> {
-    const [user] = await this.db
+    const [user] = await database
       .select()
       .from(users)
       .where(eq(users.id, id))
@@ -37,4 +36,4 @@ export class UserModel {
   }
 }
 
-export const userModel = new UserModel(database);
+export const userModel = new UserModel();
