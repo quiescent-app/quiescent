@@ -1,10 +1,9 @@
-import { PGlite } from "@electric-sql/pglite";
+import type { PGlite } from "@electric-sql/pglite";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ArticleModel } from "../../model/article.model.js";
 import { UserModel } from "../../model/user.model.js";
 import { createTestDatabase } from "../database/database.js";
-import type { Database } from "../../db/client.js";
 
 const databaseState = vi.hoisted(() => ({
   current: undefined as Record<PropertyKey, unknown> | undefined,
@@ -33,14 +32,9 @@ describe("ArticleModel", () => {
 
   beforeEach(async () => {
     const testDatabase = await createTestDatabase();
-
     client = testDatabase.client;
-
-    articleModel = new ArticleModel(
-      testDatabase.database as unknown as Database,
-    );
-
     databaseState.current = testDatabase.database as unknown as Record<PropertyKey, unknown>;
+    articleModel = new ArticleModel();
     userModel = new UserModel();
 
     const user = await userModel.create({
@@ -58,7 +52,7 @@ describe("ArticleModel", () => {
   });
 
   afterEach(async () => {
-    await client?.close();
+    if (client) await client.close();
     databaseState.current = undefined;
   });
 
@@ -69,7 +63,7 @@ describe("ArticleModel", () => {
   };
 
   describe("create", () => {
-    it("creates an article with default values", async () => {
+    it("should create an article with default values", async () => {
       const article = await articleModel.create({
         ...articleInput,
         userId,
@@ -87,7 +81,7 @@ describe("ArticleModel", () => {
       expect(article.updatedAt).toBeInstanceOf(Date);
     });
 
-    it("creates an article with optional content", async () => {
+    it("should create an article with content", async () => {
       const article = await articleModel.create({
         ...articleInput,
         userId,
@@ -97,7 +91,7 @@ describe("ArticleModel", () => {
       expect(article.content).toBe("This is the article content.");
     });
 
-    it("prevents duplicate URLs for the same user", async () => {
+    it("should prevent duplicate URLs for the same user", async () => {
       await articleModel.create({ ...articleInput, userId });
 
       await expect(
@@ -107,7 +101,7 @@ describe("ArticleModel", () => {
       });
     });
 
-    it("allows different users to save the same URL", async () => {
+    it("should allow different users to save the same URL", async () => {
       const first = await articleModel.create({
         ...articleInput,
         userId,
@@ -124,7 +118,7 @@ describe("ArticleModel", () => {
   });
 
   describe("findByUserId", () => {
-    it("returns only articles belonging to the user", async () => {
+    it("should return only articles belonging to the user", async () => {
       await articleModel.create({
         ...articleInput,
         userId,
@@ -141,7 +135,7 @@ describe("ArticleModel", () => {
       expect(articles[0]?.userId).toBe(userId);
     });
 
-    it("returns an empty array when the user has no articles", async () => {
+    it("should return an empty array when the user has no articles", async () => {
       const articles = await articleModel.findByUserId(userId);
 
       expect(articles).toEqual([]);
@@ -149,7 +143,7 @@ describe("ArticleModel", () => {
   });
 
   describe("findById", () => {
-    it("finds an article by ID", async () => {
+    it("should find an article by ID", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -161,7 +155,7 @@ describe("ArticleModel", () => {
       expect(article?.title).toBe(articleInput.title);
     });
 
-    it("returns null when the article does not exist", async () => {
+    it("should return null when the article does not exist", async () => {
       const article = await articleModel.findById(
         "00000000-0000-4000-8000-000000000000",
       );
@@ -169,7 +163,7 @@ describe("ArticleModel", () => {
       expect(article).toBeNull();
     });
 
-    it("finds an article regardless of its owner", async () => {
+    it("should find an article by its ID", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId: otherUserId,
@@ -183,7 +177,7 @@ describe("ArticleModel", () => {
   });
 
   describe("findByUrl", () => {
-    it("finds an article by URL", async () => {
+    it("should find an article by URL", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -194,7 +188,7 @@ describe("ArticleModel", () => {
       expect(article?.id).toBe(created.id);
     });
 
-    it("returns null when the URL does not exist", async () => {
+    it("should return null when the URL does not exist", async () => {
       const article = await articleModel.findByUrl(
         "https://example.com/not-found",
         userId,
@@ -203,7 +197,7 @@ describe("ArticleModel", () => {
       expect(article).toBeNull();
     });
 
-    it("prevents accessing another user's article by URL", async () => {
+    it("should prevent accessing another user's article by URL", async () => {
       await articleModel.create({
         ...articleInput,
         userId,
@@ -219,7 +213,7 @@ describe("ArticleModel", () => {
   });
 
   describe("update", () => {
-    it("updates the reading progress", async () => {
+    it("should update the reading progress", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -235,7 +229,7 @@ describe("ArticleModel", () => {
       expect(updated?.lastAccessedAt).toBeInstanceOf(Date);
     });
 
-    it("sets completedAt when progress reaches 100", async () => {
+    it("should set completedAt when progress reaches 100", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -249,7 +243,7 @@ describe("ArticleModel", () => {
       expect(updated?.completedAt).toBeInstanceOf(Date);
     });
 
-    it("clears completedAt when progress drops below 100", async () => {
+    it("should clear completedAt when progress drops below 100", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -267,7 +261,7 @@ describe("ArticleModel", () => {
       expect(updated?.completedAt).toBeNull();
     });
 
-    it("returns null when updating another user's article", async () => {
+    it("should return null when updating another user's article", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -284,7 +278,7 @@ describe("ArticleModel", () => {
       expect(original?.readingProgress).toBe(0);
     });
 
-    it("returns null when updating a nonexistent article", async () => {
+    it("should return null when updating a nonexistent article", async () => {
       const updated = await articleModel.update(
         "00000000-0000-4000-8000-000000000000",
         userId,
@@ -296,7 +290,7 @@ describe("ArticleModel", () => {
   });
 
   describe("delete", () => {
-    it("deletes an existing article", async () => {
+    it("should delete an existing article", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -311,7 +305,7 @@ describe("ArticleModel", () => {
       expect(article).toBeNull();
     });
 
-    it("prevents deleting another user's article", async () => {
+    it("should prevent deleting another user's article", async () => {
       const created = await articleModel.create({
         ...articleInput,
         userId,
@@ -326,7 +320,7 @@ describe("ArticleModel", () => {
       expect(article).not.toBeNull();
     });
 
-    it("returns false when deleting a nonexistent article", async () => {
+    it("should return false when deleting a nonexistent article", async () => {
       const deleted = await articleModel.delete(
         "00000000-0000-4000-8000-000000000000",
         userId,
