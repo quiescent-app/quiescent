@@ -56,12 +56,10 @@ const requireReadingProgress: RequestHandler = (req, _res, next) => {
   next();
 };
 
-export function createArticleRouter(
-  jwtSecret?: Uint8Array,
-): Router {
+export function createArticleRouter(): Router {
   const router = Router();
 
-  router.use(requireAuth(jwtSecret));
+  router.use(requireAuth());
   router.get("/", articleController.list);
   router.post("/", requireCreateArticle, articleController.create);
   router.get("/by-url", requireArticleUrl, articleController.getByUrl);

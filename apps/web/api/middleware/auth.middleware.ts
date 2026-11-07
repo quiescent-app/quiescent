@@ -6,10 +6,9 @@ import { verifyAccessToken } from "../utils/token.utils.js";
 /**
  * Requires a valid Bearer access token and stores its user ID in `res.locals.userId`.
  *
- * @param secret Optional JWT signing secret used to verify the token.
  * @returns Middleware that forwards a 401 error when the token is missing or invalid.
  */
-export function requireAuth(secret?: Uint8Array): RequestHandler {
+export function requireAuth(): RequestHandler {
   return async (req, res, next) => {
     const authorization = req.header("authorization");
     const [scheme, token, ...extra] = authorization?.split(" ") ?? [];
@@ -20,7 +19,7 @@ export function requireAuth(secret?: Uint8Array): RequestHandler {
     }
 
     try {
-      const { userId } = await verifyAccessToken(token, secret);
+      const { userId } = await verifyAccessToken(token);
       res.locals.userId = userId;
       next();
     } catch {
