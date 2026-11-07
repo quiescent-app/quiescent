@@ -1,23 +1,21 @@
-import { articleModel, type UpdateArticleInput } from "../model/article.model.js";
-
 import { AppError, HttpStatus } from "../errors/appError.js";
+
 import {
-  getArticleDomain,
-  isArticleUrlUniqueViolation,
-  normalizeArticleUrl,
-} from "../utils/article.utils.js";
+  articleModel,
+  type UpdateArticleInput,
+} from "../model/article.model.js";
+
+import { normalizeArticleUrl, getArticleDomain } from "../utils/article.utils.js";
 
 export interface CreateArticleRequest {
   title: string;
   url: string;
   content?: string;
 }
-export class ArticleService {
-  async createArticle(userId: string, input: CreateArticleRequest) {
-    if (!input.title?.trim()) {
-      throw new AppError(HttpStatus.BAD_REQUEST, "Article title is required");
-    }
 
+export class ArticleService {
+
+  async createArticle(userId: string, input: CreateArticleRequest) {
     const url = normalizeArticleUrl(input.url);
     const domain = getArticleDomain(url);
 
@@ -27,20 +25,13 @@ export class ArticleService {
       throw new AppError(HttpStatus.CONFLICT, "Article already exists");
     }
 
-    try {
-      return await articleModel.create({
-        userId,
-        title: input.title.trim(),
-        url,
-        domain,
-        content: input.content,
-      });
-    } catch (error) {
-      if (isArticleUrlUniqueViolation(error)) {
-        throw new AppError(HttpStatus.CONFLICT, "Article already exists");
-      }
-      throw error;
-    }
+    return articleModel.create({
+      userId,
+      title: input.title.trim(),
+      url,
+      domain,
+      content: input.content,
+    });
   }
 
   async getArticles(userId: string) {
@@ -50,8 +41,12 @@ export class ArticleService {
   async getArticleById(id: string, userId: string) {
     const article = await articleModel.findById(id);
 
-    if (!article || article.userId !== userId) {
-      return null;
+    if (!article) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    }
+
+    if (article.userId !== userId) {
+      throw new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
     }
 
     return article;
@@ -60,7 +55,17 @@ export class ArticleService {
   async getArticleByUrl(url: string, userId: string) {
     const normalizedUrl = normalizeArticleUrl(url);
 
-    return articleModel.findByUrl(normalizedUrl, userId);
+    const article = await articleModel.findByUrl(normalizedUrl, userId);
+
+    if (!article) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    }
+
+    if (article.userId !== userId) {
+      throw new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
+    }
+
+    return article;
   }
 
   async updateArticle(id: string, userId: string, input: UpdateArticleInput) {

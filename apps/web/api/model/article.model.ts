@@ -1,6 +1,6 @@
 import { and, desc, eq } from "drizzle-orm";
 
-import { database, type Database } from "../db/client.js";
+import { database } from "../db/client.js";
 import {
   articles,
   type ArticleRecord,
@@ -16,10 +16,9 @@ export type CreateArticleInput = Pick<
 export type UpdateArticleInput = Pick<ArticleRecord, "readingProgress">;
 
 export class ArticleModel {
-  constructor(private readonly database: Database) {}
 
   async create(input: CreateArticleInput): Promise<ArticleRecord> {
-    const [article] = await this.database
+    const [article] = await database
       .insert(articles)
       .values({
         ...input,
@@ -35,7 +34,7 @@ export class ArticleModel {
   }
 
   async findByUserId(userId: string): Promise<ArticleRecord[]> {
-    return this.database
+    return database
       .select()
       .from(articles)
       .where(eq(articles.userId, userId))
@@ -43,7 +42,7 @@ export class ArticleModel {
   }
 
   async findById(id: string): Promise<ArticleRecord | null> {
-    const [article] = await this.database
+    const [article] = await database
       .select()
       .from(articles)
       .where(eq(articles.id, id))
@@ -53,7 +52,7 @@ export class ArticleModel {
   }
 
   async findByUrl(url: string, userId: string): Promise<ArticleRecord | null> {
-    const [article] = await this.database
+    const [article] = await database
       .select()
       .from(articles)
       .where(and(eq(articles.url, url), eq(articles.userId, userId)))
@@ -70,7 +69,7 @@ export class ArticleModel {
     const { readingProgress } = input;
     const now = new Date();
 
-    const [article] = await this.database
+    const [article] = await database
       .update(articles)
       .set({
         readingProgress,
@@ -85,7 +84,7 @@ export class ArticleModel {
   }
 
   async delete(id: string, userId: string): Promise<boolean> {
-    const deleted = await this.database
+    const deleted = await database
       .delete(articles)
       .where(and(eq(articles.id, id), eq(articles.userId, userId)))
       .returning({ id: articles.id });
@@ -94,4 +93,4 @@ export class ArticleModel {
   }
 }
 
-export const articleModel = new ArticleModel(database);
+export const articleModel = new ArticleModel();

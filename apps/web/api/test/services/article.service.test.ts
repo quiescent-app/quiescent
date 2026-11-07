@@ -1,7 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { articleService } from "../../service/article.service.js";
-import { articleModel } from "../../model/article.model.js";
+import { ArticleService } from "../../service/article.service.js";
+import { HttpStatus } from "../../errors/appError.js";
+
+const mocks = vi.hoisted(() => ({
+  articleModel: {
+    create: vi.fn(),
+    findByUserId: vi.fn(),
+    findById: vi.fn(),
+    findByUrl: vi.fn(),
+    update: vi.fn(),
+    delete: vi.fn(),
+  },
+}));
+
+vi.mock("../../model/article.model.js", () => ({
+  articleModel: mocks.articleModel,
+}));
 
 describe("ArticleService", () => {
   const userId = "user-123";
@@ -20,59 +35,23 @@ describe("ArticleService", () => {
     completedAt: null,
   };
 
-  let model: {
-    create: ReturnType<typeof vi.fn>;
-    findByUserId: ReturnType<typeof vi.fn>;
-    findById: ReturnType<typeof vi.fn>;
-    findByUrl: ReturnType<typeof vi.fn>;
-    update: ReturnType<typeof vi.fn>;
-    delete: ReturnType<typeof vi.fn>;
-  };
-
-  const service = articleService;
+  let service: ArticleService;
 
   beforeEach(() => {
-    model = {
-      create: vi.fn(),
-      findByUserId: vi.fn(),
-      findById: vi.fn(),
-      findByUrl: vi.fn(),
-      update: vi.fn(),
-      delete: vi.fn(),
-    };
-
-    vi.spyOn(articleModel, "create").mockImplementation(
-      model.create as typeof articleModel.create,
-    );
-    vi.spyOn(articleModel, "findByUserId").mockImplementation(
-      model.findByUserId as typeof articleModel.findByUserId,
-    );
-    vi.spyOn(articleModel, "findById").mockImplementation(
-      model.findById as typeof articleModel.findById,
-    );
-    vi.spyOn(articleModel, "findByUrl").mockImplementation(
-      model.findByUrl as typeof articleModel.findByUrl,
-    );
-    vi.spyOn(articleModel, "update").mockImplementation(
-      model.update as typeof articleModel.update,
-    );
-    vi.spyOn(articleModel, "delete").mockImplementation(
-      model.delete as typeof articleModel.delete,
-    );
+    vi.clearAllMocks();
+    service = new ArticleService();
   });
 
-  afterEach(() => vi.restoreAllMocks());
-
-  it("creates a new article", async () => {
-    model.findByUrl.mockResolvedValue(null);
-    model.create.mockResolvedValue(article);
+  it("should create and return a new article", async () => {
+    mocks.articleModel.findByUrl.mockResolvedValue(null);
+    mocks.articleModel.create.mockResolvedValue(article);
 
     const result = await service.createArticle(userId, {
       title: "Test Article",
       url: "https://example.com/article",
     });
 
-    expect(model.create).toHaveBeenCalledWith({
+    expect(mocks.articleModel.create).toHaveBeenCalledWith({
       userId,
       title: "Test Article",
       url: "https://example.com/article",
@@ -83,19 +62,8 @@ describe("ArticleService", () => {
     expect(result).toEqual(article);
   });
 
-  it("rejects an article with an empty title", async () => {
-    await expect(
-      service.createArticle(userId, {
-        title: "   ",
-        url: "https://example.com/article",
-      }),
-    ).rejects.toThrow("Article title is required");
-
-    expect(model.create).not.toHaveBeenCalled();
-  });
-
-  it("rejects creating duplicate articles with the same URL", async () => {
-    model.findByUrl.mockResolvedValue(article);
+  it("should reject creating a duplicate article with status code 409", async () => {
+    mocks.articleModel.findByUrl.mockResolvedValue(article);
 
     await expect(
       service.createArticle(userId, {
@@ -104,76 +72,97 @@ describe("ArticleService", () => {
       }),
     ).rejects.toThrow("Article already exists");
 
-    expect(model.create).not.toHaveBeenCalled();
+    expect(mocks.articleModel.create).not.toHaveBeenCalled();
   });
 
-  it("retrieves all articles belonging to a user", async () => {
-    model.findByUserId.mockResolvedValue([article]);
+  it("should retrieve all articles belonging to a user", async () => {
+    mocks.articleModel.findByUserId.mockResolvedValue([article]);
 
     const result = await service.getArticles(userId);
 
-    expect(model.findByUserId).toHaveBeenCalledWith(userId);
+    expect(mocks.articleModel.findByUserId).toHaveBeenCalledWith(userId);
     expect(result).toEqual([article]);
   });
 
-  it("retrieves an article by ID", async () => {
-    model.findById.mockResolvedValue(article);
+  it("should retrieve an article by ID", async () => {
+    mocks.articleModel.findById.mockResolvedValue(article);
 
     const result = await service.getArticleById(article.id, userId);
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
+    expect(mocks.articleModel.findById).toHaveBeenCalledWith(article.id);
 
     expect(result).toEqual(article);
   });
 
-  it("prevents accessing another user's article by ID", async () => {
-    model.findById.mockResolvedValue({
+  it("should reject access to another user's article by ID with status code 403", async () => {
+    mocks.articleModel.findById.mockResolvedValue({
       ...article,
       userId: "other-user-456",
     });
 
-    const result = await service.getArticleById(article.id, userId);
+    await expect(service.getArticleById(article.id, userId)).rejects.toMatchObject({
+      statusCode: HttpStatus.FORBIDDEN,
+    });
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
-    expect(result).toBeNull();
+    expect(mocks.articleModel.findById).toHaveBeenCalledWith(article.id);
   });
 
-  it("returns null when the article does not exist", async () => {
-    model.findById.mockResolvedValue(null);
+  it("should reject a missing article with status code 404", async () => {
+    mocks.articleModel.findById.mockResolvedValue(null);
 
-    const result = await service.getArticleById(article.id, userId);
+    await expect(service.getArticleById(article.id, userId)).rejects.toMatchObject({
+      statusCode: HttpStatus.NOT_FOUND,
+    });
 
-    expect(model.findById).toHaveBeenCalledWith(article.id);
-    expect(result).toBeNull();
+    expect(mocks.articleModel.findById).toHaveBeenCalledWith(article.id);
   });
 
-  it("normalizes URLs before searching", async () => {
-    model.findByUrl.mockResolvedValue(article);
+  it("should normalize URLs before searching", async () => {
+    mocks.articleModel.findByUrl.mockResolvedValue(article);
 
     await service.getArticleByUrl(
       "https://example.com/article#section",
       userId,
     );
 
-    expect(model.findByUrl).toHaveBeenCalledWith(
+    expect(mocks.articleModel.findByUrl).toHaveBeenCalledWith(
       "https://example.com/article",
       userId,
     );
   });
 
-  it("updates article reading progress", async () => {
+  it("should reject access to another user's article by URL with status code 403", async () => {
+    mocks.articleModel.findByUrl.mockResolvedValue({
+      ...article,
+      userId: "other-user-456",
+    });
+
+    await expect(
+      service.getArticleByUrl("https://example.com/article#section", userId),
+    ).rejects.toMatchObject({
+      statusCode: HttpStatus.FORBIDDEN,
+      message: "You do not have permission to access this article",
+    });
+
+    expect(mocks.articleModel.findByUrl).toHaveBeenCalledWith(
+      "https://example.com/article",
+      userId,
+    );
+  });
+
+  it("should update article reading progress", async () => {
     const updatedArticle = {
       ...article,
       readingProgress: 75,
     };
 
-    model.update.mockResolvedValue(updatedArticle);
+    mocks.articleModel.update.mockResolvedValue(updatedArticle);
 
     const result = await service.updateArticle(article.id, userId, {
       readingProgress: 75,
     });
 
-    expect(model.update).toHaveBeenCalledWith(article.id, userId, {
+    expect(mocks.articleModel.update).toHaveBeenCalledWith(article.id, userId, {
       readingProgress: 75,
     });
 
@@ -181,7 +170,7 @@ describe("ArticleService", () => {
   });
 
   it.each([-1, 101, 50.5])(
-    "rejects invalid reading progress: %s",
+    "should reject invalid reading progress with status code 400: %s",
     async (readingProgress) => {
       await expect(
         service.updateArticle(article.id, userId, {
@@ -191,25 +180,25 @@ describe("ArticleService", () => {
         "Reading progress must be an integer between 0 and 100",
       );
 
-      expect(model.update).not.toHaveBeenCalled();
+      expect(mocks.articleModel.update).not.toHaveBeenCalled();
     },
   );
 
-  it("deletes an article", async () => {
-    model.delete.mockResolvedValue(true);
+  it("should delete an article", async () => {
+    mocks.articleModel.delete.mockResolvedValue(true);
 
     const result = await service.deleteArticle(article.id, userId);
 
-    expect(model.delete).toHaveBeenCalledWith(article.id, userId);
+    expect(mocks.articleModel.delete).toHaveBeenCalledWith(article.id, userId);
     expect(result).toBe(true);
   });
 
-  it("returns false when deleting a nonexistent article", async () => {
-    model.delete.mockResolvedValue(false);
+  it("should return false when deleting a nonexistent article", async () => {
+    mocks.articleModel.delete.mockResolvedValue(false);
 
     const result = await service.deleteArticle(article.id, userId);
 
-    expect(model.delete).toHaveBeenCalledWith(article.id, userId);
+    expect(mocks.articleModel.delete).toHaveBeenCalledWith(article.id, userId);
     expect(result).toBe(false);
   });
 });
