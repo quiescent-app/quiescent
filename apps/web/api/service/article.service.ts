@@ -1,5 +1,7 @@
+import { AppError, HttpStatus } from "../errors/appError.js";
+
 import {
-  ArticleModel,
+  articleModel,
   type UpdateArticleInput,
 } from "../model/article.model.js";
 
@@ -12,23 +14,18 @@ export interface CreateArticleRequest {
 }
 
 export class ArticleService {
-  constructor(private readonly articleModel: ArticleModel) {}
 
   async createArticle(userId: string, input: CreateArticleRequest) {
-    if (!input.title?.trim()) {
-      throw new Error("Article title is required");
-    }
-
     const url = normalizeArticleUrl(input.url);
     const domain = getArticleDomain(url);
 
-    const existingArticle = await this.articleModel.findByUrl(url, userId);
+    const existingArticle = await articleModel.findByUrl(url, userId);
 
     if (existingArticle) {
-      throw new Error("Article already exists");
+      throw new AppError(HttpStatus.CONFLICT, "Article already exists");
     }
 
-    return this.articleModel.create({
+    return articleModel.create({
       userId,
       title: input.title.trim(),
       url,
@@ -38,14 +35,18 @@ export class ArticleService {
   }
 
   async getArticles(userId: string) {
-    return this.articleModel.findByUserId(userId);
+    return articleModel.findByUserId(userId);
   }
 
   async getArticleById(id: string, userId: string) {
-    const article = await this.articleModel.findById(id);
+    const article = await articleModel.findById(id);
 
-    if (!article || article.userId !== userId) {
-      return null;
+    if (!article) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    }
+
+    if (article.userId !== userId) {
+      throw new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
     }
 
     return article;
@@ -54,7 +55,17 @@ export class ArticleService {
   async getArticleByUrl(url: string, userId: string) {
     const normalizedUrl = normalizeArticleUrl(url);
 
-    return this.articleModel.findByUrl(normalizedUrl, userId);
+    const article = await articleModel.findByUrl(normalizedUrl, userId);
+
+    if (!article) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    }
+
+    if (article.userId !== userId) {
+      throw new AppError(HttpStatus.FORBIDDEN, "You do not have permission to access this article");
+    }
+
+    return article;
   }
 
   async updateArticle(id: string, userId: string, input: UpdateArticleInput) {
@@ -65,12 +76,17 @@ export class ArticleService {
       readingProgress < 0 ||
       readingProgress > 100
     ) {
-      throw new Error("Reading progress must be an integer between 0 and 100");
+      throw new AppError(
+        HttpStatus.BAD_REQUEST,
+        "Reading progress must be an integer between 0 and 100",
+      );
     }
-    return this.articleModel.update(id, userId, input);
+    return articleModel.update(id, userId, input);
   }
 
   async deleteArticle(id: string, userId: string): Promise<boolean> {
-    return this.articleModel.delete(id, userId);
+    return articleModel.delete(id, userId);
   }
 }
+
+export const articleService = new ArticleService();
