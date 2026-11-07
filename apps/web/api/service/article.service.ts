@@ -5,7 +5,7 @@ import {
   type UpdateArticleInput,
 } from "../model/article.model.js";
 
-import { normalizeArticleUrl, getArticleDomain } from "../utils/article-url.js";
+import { normalizeArticleUrl, getArticleDomain } from "../utils/article.utils.js";
 
 export interface CreateArticleRequest {
   title: string;
@@ -81,11 +81,15 @@ export class ArticleService {
         "Reading progress must be an integer between 0 and 100",
       );
     }
-    return articleModel.update(id, userId, input);
+    const article = await articleModel.update(id, userId, input);
+    if (!article) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    return article;
   }
 
   async deleteArticle(id: string, userId: string): Promise<boolean> {
-    return articleModel.delete(id, userId);
+    const deleted = await articleModel.delete(id, userId);
+    if (!deleted) throw new AppError(HttpStatus.NOT_FOUND, "Article not found");
+    return deleted;
   }
 }
 
