@@ -61,3 +61,18 @@ terraform validate
 
 No buckets or IAM policies are provisioned by these validation commands.
 Review a plan against the intended AWS account before applying.
+
+## Local development access
+
+The service and adapter tests use mocks and need no AWS account. A live local
+upload will require the development bucket to exist and a developer AWS profile
+whose role has the **development** `photo_service_policy_arns` policy attached.
+The policy definition alone grants no access. An AWS administrator must attach
+it to the developer role or its permission set; do not use production access or
+put static AWS keys in browser code.
+
+Once that identity and bucket exist, select the profile and configure the local
+API process with `AWS_PROFILE`, `AWS_REGION=us-east-2`, and the development value
+of `photo_bucket_names` as `S3_PHOTO_BUCKET`. The AWS SDK can use the selected
+profile's credentials. This repo has no photo routes or S3 client startup wiring
+yet, so these settings do not make an end-to-end local upload available today.
