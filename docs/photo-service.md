@@ -35,3 +35,29 @@ idempotent, and authorize reads and deletion. It must also retain enough state t
 remove a final object if saving `ReadyPhoto` fails, and retry deletion of
 abandoned pending or final objects. Until those pieces exist, this service is
 not an end-to-end upload feature.
+
+## Terraform definitions
+
+The root `main.tf` defines one private S3 bucket and one backend IAM policy for
+each of development, staging, and production in `us-east-2`. Bucket names include
+the AWS account ID. The policy ARN is an output to attach to the backend's
+workload identity when hosting is available; Terraform does not create that
+identity. The bucket names and region outputs map to `S3_PHOTO_BUCKET` and
+`AWS_REGION` for the API.
+
+Development CORS allows `http://localhost:5173`. Staging and production have no
+browser CORS rule until their frontends exist. At that point, provide exact
+HTTPS origins through `staging_web_origins` and `production_web_origins`; both
+variables default to empty lists. The configuration uses one local Terraform
+state for all three environments, so a future normal apply would manage all
+three at once. State files are ignored by Git; move to a shared remote state
+backend before team-operated applies.
+
+```bash
+terraform fmt -check main.tf
+terraform init -backend=false
+terraform validate
+```
+
+No buckets or IAM policies are provisioned by these validation commands.
+Review a plan against the intended AWS account before applying.
