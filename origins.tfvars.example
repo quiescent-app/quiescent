@@ -1,0 +1,3 @@
+# Leave these empty until staging and production frontends exist.
+staging_web_origins    = []
+production_web_origins = []
