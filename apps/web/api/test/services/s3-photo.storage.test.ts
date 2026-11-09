@@ -9,8 +9,8 @@ import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { AppError, HttpStatus } from "../../errors/appError.js";
 import { S3PhotoStorage } from "../../service/s3-photo.storage.js";
-import { PhotoStorageError } from "../../service/upload.service.js";
 
 // Keep signing local while asserting the policy passed to the AWS helpers.
 vi.mock("@aws-sdk/s3-presigned-post", () => ({
@@ -68,7 +68,9 @@ describe("S3PhotoStorage", () => {
     });
 
     send.mockResolvedValueOnce({ Body: (async function* () { yield Buffer.from("abcd"); })() });
-    await expect(storage.read("photos/id", 3)).rejects.toBeInstanceOf(PhotoStorageError);
+    await expect(storage.read("photos/id", 3)).rejects.toMatchObject({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+    } satisfies Partial<AppError>);
   });
 
   it("copies to a distinct key, signs reads, and deletes by key", async () => {
