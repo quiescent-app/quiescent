@@ -32,7 +32,8 @@ describe("getDatabaseUrl", () => {
 });
 
 describe("Neon database health", () => {
-  it("connects to the configured database and runs a health query",
+  it(
+    "connects to the configured database and runs a health query",
     async () => {
       const sql = neon(getDatabaseUrl());
       const result = await sql`select 1 as healthy`;
