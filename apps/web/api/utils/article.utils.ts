@@ -1,17 +1,4 @@
-import { NeonDbError } from "@neondatabase/serverless";
-import { DrizzleQueryError } from "drizzle-orm/errors";
-
 import { AppError, HttpStatus } from "../errors/appError.js";
-
-export function isArticleUrlUniqueViolation(error: unknown): boolean {
-  const cause = error instanceof DrizzleQueryError ? error.cause : error;
-
-  return (
-    cause instanceof NeonDbError &&
-    cause.code === "23505" &&
-    cause.constraint === "articles_user_url_unique"
-  );
-}
 
 export function normalizeArticleUrl(url: string): string {
   try {
