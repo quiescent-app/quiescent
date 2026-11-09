@@ -8,12 +8,12 @@ import {
 import { createPresignedPost } from "@aws-sdk/s3-presigned-post";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import { AppError, HttpStatus } from "../errors/appError.js";
 import type {
   PhotoContentType,
   PhotoStorage,
   StoredObject,
 } from "./upload.service.js";
-import { PhotoStorageError } from "./upload.service.js";
 
 export class S3PhotoStorage implements PhotoStorage {
   /** Bind all storage operations to one environment's bucket. */
@@ -51,7 +51,7 @@ export class S3PhotoStorage implements PhotoStorage {
         Key: key,
       }));
       if (object.ContentLength === undefined) {
-        throw new PhotoStorageError("Photo object has no size");
+        throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
       }
       return { sizeBytes: object.ContentLength };
     } catch (error) {
@@ -70,7 +70,7 @@ export class S3PhotoStorage implements PhotoStorage {
     }));
     const body = response.Body;
     if (!body || !(Symbol.asyncIterator in body)) {
-      throw new PhotoStorageError("Photo object has no readable body");
+      throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
     }
 
     const chunks: Buffer[] = [];
@@ -78,7 +78,9 @@ export class S3PhotoStorage implements PhotoStorage {
     for await (const chunk of body) {
       const bytes = Buffer.from(chunk);
       size += bytes.length;
-      if (size > maxBytes) throw new PhotoStorageError("Photo object exceeds size limit");
+      if (size > maxBytes) {
+        throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
+      }
       chunks.push(bytes);
     }
     return Buffer.concat(chunks, size);

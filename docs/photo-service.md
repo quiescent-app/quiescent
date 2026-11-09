@@ -4,10 +4,10 @@
 validation. `S3PhotoStorage` in `service/s3-photo.storage.ts` implements its
 `PhotoStorage` interface. The service currently has no route or database wiring.
 
-The application will construct an AWS `S3Client` with its workload credentials and
-environment-specific private bucket, then inject `new S3PhotoStorage(client, bucket)`
-into `UploadService`. Browser code receives a temporary upload form, including
-its generated pending key, but must not choose a key or receive AWS credentials.
+`UploadService` constructs its S3 adapter directly from `AWS_REGION` and
+`S3_PHOTO_BUCKET`. The AWS SDK uses the backend process's credentials. Browser
+code receives a temporary upload form, including its generated pending key,
+but must not choose a key or receive AWS credentials.
 
 ## Service flow
 

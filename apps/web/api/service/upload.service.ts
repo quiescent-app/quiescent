@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 
+import { S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
+
+import { AppError, HttpStatus } from "../errors/appError.js";
+import { S3PhotoStorage } from "./s3-photo.storage.js";
 
 export const PHOTO_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const PHOTO_UPLOAD_TTL_SECONDS = 300;
@@ -66,47 +70,30 @@ export interface ReadyPhoto {
   height: number;
 }
 
-export class PhotoValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "PhotoValidationError";
-  }
-}
-
-export class PhotoStorageError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "PhotoStorageError";
-  }
-}
-
 export class UploadService {
-  constructor(
-    private readonly storage: PhotoStorage,
-    private readonly now: () => Date = () => new Date(),
-  ) {}
+  private readonly storage: PhotoStorage = createPhotoStorage();
 
   /** Validate the declared upload and create its pending record and S3 form. */
   async prepareUpload(
     ownerId: string,
     input: { contentType: string; sizeBytes: number },
   ): Promise<{ pending: PendingPhotoUpload; target: UploadTarget }> {
-    if (!ownerId) throw new PhotoValidationError("Photo owner is required");
+    if (!ownerId) throw new AppError(HttpStatus.BAD_REQUEST, "Photo owner is required");
     if (!contentTypes.has(input.contentType)) {
-      throw new PhotoValidationError("Unsupported photo type");
+      throw new AppError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported photo type");
     }
     if (
       !Number.isSafeInteger(input.sizeBytes) ||
       input.sizeBytes < 1 ||
       input.sizeBytes > PHOTO_MAX_SIZE_BYTES
     ) {
-      throw new PhotoValidationError("Photo size must be between 1 byte and 10 MiB");
+      throw new AppError(HttpStatus.BAD_REQUEST, "Photo size must be between 1 byte and 10 MiB");
     }
 
     const id = randomUUID();
     const pendingKey = `pending/${id}`;
     const contentType = input.contentType as PhotoContentType;
-    const expiresAt = new Date(this.now().getTime() + PHOTO_UPLOAD_TTL_SECONDS * 1000);
+    const expiresAt = new Date(Date.now() + PHOTO_UPLOAD_TTL_SECONDS * 1000);
     const target = await this.storage.createUploadTarget(
       pendingKey,
       contentType,
@@ -122,14 +109,14 @@ export class UploadService {
 
   /** Validate a trusted pending upload and return metadata for its final copy. */
   async completeUpload(pending: PendingPhotoUpload): Promise<ReadyPhoto> {
-    if (pending.expiresAt.getTime() <= this.now().getTime()) {
-      throw new PhotoValidationError("Photo upload has expired");
+    if (pending.expiresAt.getTime() <= Date.now()) {
+      throw new AppError(HttpStatus.BAD_REQUEST, "Photo upload has expired");
     }
 
     const source = await this.storage.inspect(pending.pendingKey);
-    if (!source) throw new PhotoValidationError("Photo upload is missing");
+    if (!source) throw new AppError(HttpStatus.NOT_FOUND, "Photo upload is missing");
     if (source.sizeBytes !== pending.declaredSizeBytes || source.sizeBytes > PHOTO_MAX_SIZE_BYTES) {
-      throw new PhotoValidationError("Uploaded photo size does not match");
+      throw new AppError(HttpStatus.BAD_REQUEST, "Uploaded photo size does not match");
     }
 
     const id = randomUUID();
@@ -139,11 +126,11 @@ export class UploadService {
     try {
       const final = await this.storage.inspect(objectKey);
       if (!final || final.sizeBytes !== pending.declaredSizeBytes) {
-        throw new PhotoValidationError("Copied photo size does not match");
+        throw new AppError(HttpStatus.BAD_REQUEST, "Copied photo size does not match");
       }
       const bytes = await this.storage.read(objectKey, PHOTO_MAX_SIZE_BYTES);
       if (bytes.length !== final.sizeBytes) {
-        throw new PhotoValidationError("Copied photo bytes are incomplete");
+        throw new AppError(HttpStatus.BAD_REQUEST, "Copied photo bytes are incomplete");
       }
       const dimensions = await validateImage(bytes, pending.contentType);
 
@@ -167,7 +154,7 @@ export class UploadService {
       try {
         await this.storage.delete(objectKey);
       } catch {
-        throw new PhotoStorageError("Photo validation failed and copied object cleanup failed");
+        throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
       }
       throw error;
     }
@@ -182,6 +169,16 @@ export class UploadService {
   async deletePhoto(photo: ReadyPhoto): Promise<void> {
     await this.storage.delete(photo.objectKey);
   }
+}
+
+/** Configure the directly imported S3 adapter for this backend environment. */
+function createPhotoStorage(): PhotoStorage {
+  const region = process.env["AWS_REGION"];
+  const bucket = process.env["S3_PHOTO_BUCKET"];
+  if (!region || !bucket) {
+    throw new Error("AWS_REGION and S3_PHOTO_BUCKET are required for photo storage");
+  }
+  return new S3PhotoStorage(new S3Client({ region }), bucket);
 }
 
 /** Decode the full image and confirm its type, dimensions, and single-frame policy. */
@@ -204,12 +201,12 @@ async function validateImage(
       !metadata.height ||
       (metadata.pages ?? 1) !== 1
     ) {
-      throw new PhotoValidationError("Uploaded bytes are not the declared photo type");
+      throw new AppError(HttpStatus.BAD_REQUEST, "Uploaded bytes are not the declared photo type");
     }
     await image.stats(); // Decode all pixels rather than trusting image headers alone.
     return { width: metadata.width, height: metadata.height };
   } catch (error) {
-    if (error instanceof PhotoValidationError) throw error;
-    throw new PhotoValidationError("Uploaded photo is invalid or exceeds pixel limit");
+    if (error instanceof AppError) throw error;
+    throw new AppError(HttpStatus.BAD_REQUEST, "Uploaded photo is invalid or exceeds pixel limit");
   }
 }
