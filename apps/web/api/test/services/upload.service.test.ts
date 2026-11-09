@@ -1,12 +1,13 @@
 import sharp from "sharp";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { AppError, HttpStatus } from "../../errors/appError.js";
+import { S3PhotoStorage } from "../../service/s3-photo.storage.js";
 
 import {
   PHOTO_MAX_SIZE_BYTES,
   PHOTO_READ_TTL_SECONDS,
   PHOTO_UPLOAD_TTL_SECONDS,
-  PhotoStorageError,
-  PhotoValidationError,
   UploadService,
   type PendingPhotoUpload,
   type PhotoStorage,
@@ -22,19 +23,26 @@ describe("UploadService", () => {
   let pending: PendingPhotoUpload;
 
   beforeEach(async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(now);
+    vi.stubEnv("AWS_REGION", "us-east-2");
+    vi.stubEnv("S3_PHOTO_BUCKET", "quiescent-photos-test");
     // Use real encoded image bytes; header-only fixtures would not exercise decoding.
     png = await sharp({
       create: { width: 2, height: 3, channels: 3, background: "red" },
     }).png().toBuffer();
     storage = {
-      createUploadTarget: vi.fn().mockResolvedValue({ url: "https://s3.example/upload", fields: {} }),
-      inspect: vi.fn().mockResolvedValue({ sizeBytes: png.length }),
-      read: vi.fn().mockResolvedValue(png),
-      copy: vi.fn().mockResolvedValue(undefined),
-      createReadUrl: vi.fn().mockResolvedValue("https://s3.example/read"),
-      delete: vi.fn().mockResolvedValue(undefined),
+      createUploadTarget: vi.spyOn(S3PhotoStorage.prototype, "createUploadTarget")
+        .mockResolvedValue({ url: "https://s3.example/upload", fields: {} }),
+      inspect: vi.spyOn(S3PhotoStorage.prototype, "inspect")
+        .mockResolvedValue({ sizeBytes: png.length }),
+      read: vi.spyOn(S3PhotoStorage.prototype, "read").mockResolvedValue(png),
+      copy: vi.spyOn(S3PhotoStorage.prototype, "copy").mockResolvedValue(undefined),
+      createReadUrl: vi.spyOn(S3PhotoStorage.prototype, "createReadUrl")
+        .mockResolvedValue("https://s3.example/read"),
+      delete: vi.spyOn(S3PhotoStorage.prototype, "delete").mockResolvedValue(undefined),
     } as PhotoStorage;
-    service = new UploadService(storage, () => now);
+    service = new UploadService();
     pending = {
       id: "upload-id",
       ownerId: "user-id",
@@ -43,6 +51,20 @@ describe("UploadService", () => {
       declaredSizeBytes: png.length,
       expiresAt: new Date(now.getTime() + PHOTO_UPLOAD_TTL_SECONDS * 1000),
     };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllEnvs();
+  });
+
+  it("requires a configured AWS region and photo bucket", () => {
+    vi.stubEnv("AWS_REGION", "");
+    expect(() => new UploadService()).toThrow("AWS_REGION and S3_PHOTO_BUCKET");
+
+    vi.stubEnv("AWS_REGION", "us-east-2");
+    vi.stubEnv("S3_PHOTO_BUCKET", "");
+    expect(() => new UploadService()).toThrow("AWS_REGION and S3_PHOTO_BUCKET");
   });
 
   it("prepares a bounded upload with a generated key", async () => {
@@ -61,14 +83,16 @@ describe("UploadService", () => {
 
   it.each(["image/gif", "text/html", ""])("rejects unsupported type %s", async (contentType) => {
     await expect(service.prepareUpload("user-id", { contentType, sizeBytes: 100 }))
-      .rejects.toBeInstanceOf(PhotoValidationError);
+      .rejects.toMatchObject({
+        statusCode: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+      } satisfies Partial<AppError>);
     expect(storage.createUploadTarget).not.toHaveBeenCalled();
   });
 
   it.each([0, -1, 1.5, PHOTO_MAX_SIZE_BYTES + 1, Number.NaN])(
     "rejects invalid declared size %s", async (sizeBytes) => {
       await expect(service.prepareUpload("user-id", { contentType: "image/png", sizeBytes }))
-        .rejects.toBeInstanceOf(PhotoValidationError);
+        .rejects.toMatchObject({ statusCode: HttpStatus.BAD_REQUEST } satisfies Partial<AppError>);
     },
   );
 
@@ -144,7 +168,10 @@ describe("UploadService", () => {
     // The final copy cannot be published when validation and its cleanup both fail.
     vi.mocked(storage.read).mockResolvedValue(Buffer.alloc(png.length));
     vi.mocked(storage.delete).mockRejectedValue(new Error("S3 unavailable"));
-    await expect(service.completeUpload(pending)).rejects.toBeInstanceOf(PhotoStorageError);
+    await expect(service.completeUpload(pending)).rejects.toMatchObject({
+      statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: "Photo storage failed",
+    } satisfies Partial<AppError>);
   });
 
   it("keeps a valid photo ready when pending-key deletion needs later cleanup", async () => {
