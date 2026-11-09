@@ -4,7 +4,6 @@ import { database } from "../db/client.js";
 import { users, type User } from "../schema/user.schema.js";
 
 export class UserModel {
-
   async create(input: { email: string; password: string }): Promise<User> {
     const [user] = await database
       .insert(users)
