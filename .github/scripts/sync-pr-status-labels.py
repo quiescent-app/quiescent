@@ -173,7 +173,11 @@ def determine_label(pull_request):
 
     checks_ready = required_checks_succeeded(contexts)
     reviews_ready = pull_request["reviewDecision"] in {None, "", "APPROVED"}
-    merge_state_ready = pull_request["mergeable"] == "MERGEABLE" and pull_request["mergeStateStatus"] == "CLEAN"
+    # UNSTABLE can reflect optional checks; required contexts were checked above.
+    merge_state_ready = (
+        pull_request["mergeable"] == "MERGEABLE"
+        and pull_request["mergeStateStatus"] in {"CLEAN", "UNSTABLE"}
+    )
     if checks_ready and reviews_ready and merge_state_ready:
         return "Ready to merge"
 
