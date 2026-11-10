@@ -10,15 +10,13 @@ on:
     types: [submitted, edited, dismissed]
   check_run:
     types: [completed]
-  check_suite:
-    types: [completed]
   status: {}
 
 permissions:
   contents: read
   checks: read
   issues: write
-  pull-requests: read
+  pull-requests: write
   statuses: read
 
 concurrency:
@@ -27,6 +25,7 @@ concurrency:
 
 jobs:
   synchronize-labels:
+    if: ${{ github.event_name != 'check_run' || github.event.check_run.name != 'synchronize-labels' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

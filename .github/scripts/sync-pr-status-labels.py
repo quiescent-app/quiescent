@@ -172,7 +172,7 @@ def determine_label(pull_request):
         return "Need Reviews"
 
     checks_ready = required_checks_succeeded(contexts)
-    reviews_ready = pull_request["reviewDecision"] in {None, "APPROVED"}
+    reviews_ready = pull_request["reviewDecision"] in {None, "", "APPROVED"}
     merge_state_ready = pull_request["mergeable"] == "MERGEABLE" and pull_request["mergeStateStatus"] == "CLEAN"
     if checks_ready and reviews_ready and merge_state_ready:
         return "Ready to merge"
