@@ -193,12 +193,29 @@ describe("ArticleService", () => {
     expect(result).toBe(true);
   });
 
-  it("should return false when deleting a nonexistent article", async () => {
+  it("should reject updating a missing or inaccessible article with status code 404", async () => {
+    mocks.articleModel.update.mockResolvedValue(null);
+
+    await expect(
+      service.updateArticle(article.id, userId, { readingProgress: 75 }),
+    ).rejects.toMatchObject({
+      statusCode: HttpStatus.NOT_FOUND,
+      message: "Article not found",
+    });
+
+    expect(mocks.articleModel.update).toHaveBeenCalledWith(article.id, userId, {
+      readingProgress: 75,
+    });
+  });
+
+  it("should reject deleting a missing or inaccessible article with status code 404", async () => {
     mocks.articleModel.delete.mockResolvedValue(false);
 
-    const result = await service.deleteArticle(article.id, userId);
+    await expect(service.deleteArticle(article.id, userId)).rejects.toMatchObject({
+      statusCode: HttpStatus.NOT_FOUND,
+      message: "Article not found",
+    });
 
     expect(mocks.articleModel.delete).toHaveBeenCalledWith(article.id, userId);
-    expect(result).toBe(false);
   });
 });
