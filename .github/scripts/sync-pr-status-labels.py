@@ -230,6 +230,12 @@ def synchronize_one(repository, owner, name, number):
 
 def pull_request_numbers_from_event(event, repository):
     payload = json.load(open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8"))
+    if event == "push":
+        return sorted(
+            item["number"]
+            for item in paginated_api(f"/repos/{repository}/pulls?state=open")
+        )
+
     pull_request = payload.get("pull_request")
     if pull_request and "number" in pull_request:
         return [pull_request["number"]]
