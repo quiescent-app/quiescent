@@ -5,8 +5,6 @@ import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import "./auth.css";
-
 export default function SignupPage() {
   const { signUp } = useAuth();
   const navigate = useNavigate();
