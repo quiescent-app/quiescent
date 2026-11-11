@@ -5,10 +5,12 @@ import { errorMiddleware } from "./middleware/error.middleware.js";
 import authRouter from "./routes/auth.routes.js";
 import { articleRouter } from "./routes/article.routes.js";
 import { userRouter } from "./routes/user.routes.js";
+import { corsMiddleware } from "./middleware/cors.middleware.js";
 
 export function createApp(): Express {
   const app = express();
 
+  app.use(corsMiddleware());
   app.use(express.json({ limit: "16kb" }));
   app.use("/auth", authRouter);
   app.use("/articles", articleRouter);

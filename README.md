@@ -68,32 +68,35 @@ health query runs only when `DATABASE_URL` is configured.
 ## Authentication API
 
 The API exposes `POST /auth/sign-up` and `POST /auth/login`. Both accept JSON
-with `email` and `password` and return a safe user record, access token, and
-refresh token. Sign-up responds with `201`; login responds with `200`.
+with `email` and `password` and return a safe user record and access token.
+The rotating refresh token is returned only as an HttpOnly cookie. Sign-up
+responds with `201`; login responds with `200`.
 
 ```bash
-curl -X POST http://localhost:3000/auth/sign-up \
+curl -c quiescent-cookies.txt -X POST http://localhost:3000/auth/sign-up \
   -H 'content-type: application/json' \
   -d '{"email":"reader@example.com","password":"a-long-password"}'
 
-curl -X POST http://localhost:3000/auth/login \
+curl -c quiescent-cookies.txt -X POST http://localhost:3000/auth/login \
   -H 'content-type: application/json' \
   -d '{"email":"reader@example.com","password":"a-long-password"}'
 ```
 
-Refresh tokens can be renewed with `POST /auth/refresh`, using
-`{"refreshToken":"..."}`. The response contains a replacement refresh token;
-clients must store it and stop using the old token. `POST /auth/logout` accepts
-the same body and responds with `204` after revoking that token family.
+Refresh tokens are renewed with `POST /auth/refresh`; the browser sends the
+HttpOnly cookie automatically and receives the rotated cookie. The request must
+include the configured web `Origin`. `POST /auth/logout` uses the same cookie
+and origin check, clears the cookie, and responds with `204` after revoking the
+token family. Set `WEB_ORIGIN` to the exact web app origin; development defaults
+to `http://localhost:5173`.
 
 ```bash
 curl -X POST http://localhost:3000/auth/refresh \
-  -H 'content-type: application/json' \
-  -d '{"refreshToken":"saved-refresh-token"}'
+  -H 'Origin: http://localhost:5173' \
+  -b quiescent-cookies.txt -c quiescent-cookies.txt
 
 curl -X POST http://localhost:3000/auth/logout \
-  -H 'content-type: application/json' \
-  -d '{"refreshToken":"saved-refresh-token"}'
+  -H 'Origin: http://localhost:5173' \
+  -b quiescent-cookies.txt -c quiescent-cookies.txt
 ```
 
 Errors use `{ "error": { "message": "..." } }`. Invalid input returns `400`,
