@@ -101,3 +101,18 @@ invalid credentials or refresh tokens return `401`, duplicate email returns
 `409`, an oversized body returns `413`, unsupported request encoding returns
 `415`, unknown routes return `404`, and unexpected server errors return a
 generic `500` response.
+## Extension sign-in and web sign-up
+
+Set `VITE_API_BASE_URL` in `apps/extension/.env` and `apps/web/ui/.env` to the
+API origin. Set `VITE_WEB_BASE_URL` in the extension to the web origin, and
+`WEB_ORIGIN` in `apps/web/api/.env` to that same web origin. The extension build
+adds its configured API host permission to the generated manifest.
+
+New users create an account at `/signup` in the web app, then sign in through
+the extension popup. The extension stores its access and refresh tokens in
+Chrome storage restricted to trusted extension contexts. It refreshes an
+expiring access token and rotates the refresh token when the popup opens.
+Signing out clears the local session and calls `/auth/logout`.
+
+Article saving from the extension is disabled until authenticated article
+requests are connected in the next milestone.
