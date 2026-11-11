@@ -1,5 +1,5 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { BookOpen, LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 import {
   Sidebar,
@@ -14,9 +14,11 @@ import {
 } from "@/components/ui/sidebar";
 
 import { mainNavigation, bottomNavigation } from "./navigation";
+import { useAuth } from "@/auth/useAuth";
 
 export function AppSidebar() {
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
+  const { logout } = useAuth();
 
   const { pathname } = useLocation();
 
@@ -52,9 +54,7 @@ export function AppSidebar() {
       {/* Branding */}
       <SidebarHeader className="p-3">
         <div className="flex h-11 items-center gap-3 px-2 group-data-[collapsible=icon]:px-0">
-          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-[#dce8d4]">
-            <BookOpen className="size-4 text-[#304b42]" />
-          </div>
+          <img className="size-8 shrink-0 rounded-lg object-cover" src="/quiescent-logo.png" alt="" />
 
           <span className="truncate font-serif text-lg text-[#233d35] group-data-[collapsible=icon]:hidden">
             Quiescent
@@ -79,9 +79,7 @@ export function AppSidebar() {
             <SidebarMenuButton
               tooltip="Log out"
               className="h-10 rounded-lg px-3 text-sm"
-              onClick={() => {
-                // Implement logout functionality here
-              }}
+              onClick={() => { void logout(); }}
             >
               <LogOut />
               <span>Log out</span>
