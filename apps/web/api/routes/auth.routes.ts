@@ -2,6 +2,12 @@ import { Router, type RequestHandler } from "express";
 
 import { authController } from "../controller/auth.controller.js";
 import { AppError, HttpStatus } from "../errors/appError.js";
+import { requireWebOrigin } from "../middleware/cors.middleware.js";
+import {
+  getClearRefreshCookieOptions,
+  readRefreshCookie,
+  REFRESH_COOKIE_NAME,
+} from "../utils/cookie.utils.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,11 +37,11 @@ const requireCredentials: RequestHandler = (req, _res, next) => {
 };
 
 /** Requires a non-empty refresh token and passes a normalized body to the controller. */
-const requireRefreshToken: RequestHandler = (req, _res, next) => {
-  const values = requireObjectBody(req.body);
-  const refreshToken = values["refreshToken"];
-  if (typeof refreshToken !== "string" || refreshToken.length === 0) {
-    throw new AppError(HttpStatus.BAD_REQUEST, "A refresh token is required");
+const requireRefreshToken: RequestHandler = (req, res, next) => {
+  const refreshToken = readRefreshCookie(req.header("cookie"));
+  if (!refreshToken) {
+    res.clearCookie(REFRESH_COOKIE_NAME, getClearRefreshCookieOptions());
+    throw new AppError(HttpStatus.UNAUTHORIZED, "Invalid or expired refresh token");
   }
 
   req.body = { refreshToken };
@@ -44,12 +50,7 @@ const requireRefreshToken: RequestHandler = (req, _res, next) => {
 
 /** Allows logout without a token and validates it when provided. */
 const requireLogoutRefreshToken: RequestHandler = (req, _res, next) => {
-  const values = requireObjectBody(req.body ?? {});
-  const refreshToken = values["refreshToken"];
-  if (refreshToken !== undefined && typeof refreshToken !== "string") {
-    throw new AppError(HttpStatus.BAD_REQUEST, "Refresh token must be a string");
-  }
-
+  const refreshToken = readRefreshCookie(req.header("cookie")) ?? undefined;
   req.body = { refreshToken };
   next();
 };
@@ -57,7 +58,7 @@ const router = Router();
 
 router.post("/sign-up", requireCredentials, authController.signUp);
 router.post("/login", requireCredentials, authController.login);
-router.post("/refresh", requireRefreshToken, authController.refresh);
-router.post("/logout", requireLogoutRefreshToken, authController.logout);
+router.post("/refresh", requireWebOrigin(), requireRefreshToken, authController.refresh);
+router.post("/logout", requireWebOrigin(), requireLogoutRefreshToken, authController.logout);
 
 export default router;
