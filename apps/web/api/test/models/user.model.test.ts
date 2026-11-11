@@ -51,6 +51,7 @@ describe("UserModel", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     ); // UUID
     expect(user.email).toBe("reader@example.com");
+    expect(user.displayName).toBeNull();
     expect(user.password).toBe("$hash$already-created-by-service");
     expect(user.createdAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
     expect(user.updatedAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
@@ -70,6 +71,20 @@ describe("UserModel", () => {
     await expect(model.findByEmail("missing@example.com")).resolves.toBeNull();
     await expect(
       model.findById("00000000-0000-4000-8000-000000000000"),
+    ).resolves.toBeNull();
+  });
+
+  it("updates a display name and returns null for an unknown user", async () => {
+    const created = await model.create({
+      email: "reader@example.com",
+      password: "stored-hash",
+    });
+
+    const updated = await model.updateDisplayName(created.id, "Reader One");
+    expect(updated?.displayName).toBe("Reader One");
+    expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
+    await expect(
+      model.updateDisplayName("00000000-0000-0000-0000-000000000000", "Reader One"),
     ).resolves.toBeNull();
   });
 
