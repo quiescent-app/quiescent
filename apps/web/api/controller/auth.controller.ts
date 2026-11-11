@@ -10,44 +10,30 @@ import {
 
 type Credentials = { email: string; password: string };
 
-function setRefreshCookie(res: Parameters<RequestHandler>[1], refreshToken: string): void {
-  res.cookie(REFRESH_COOKIE_NAME, refreshToken, getRefreshCookieOptions());
-}
-
-function clearRefreshCookie(res: Parameters<RequestHandler>[1]): void {
-  res.clearCookie(REFRESH_COOKIE_NAME, getClearRefreshCookieOptions());
-}
-
-function sendSession(
-  res: Parameters<RequestHandler>[1],
-  status: HttpStatus,
-  result: Awaited<ReturnType<typeof authService.register>>,
-): void {
-  setRefreshCookie(res, result.refreshToken);
-  res.status(status).json({ user: result.user, accessToken: result.accessToken });
-}
-
 export class AuthController {
   readonly signUp: RequestHandler = async (req, res) => {
     const { email, password } = req.body as Credentials;
     const result = await authService.register({ email, password });
-    sendSession(res, HttpStatus.CREATED, result);
+    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
+    res.status(HttpStatus.CREATED).json({ user: result.user, accessToken: result.accessToken });
   };
 
   readonly login: RequestHandler = async (req, res) => {
     const { email, password } = req.body as Credentials;
     const result = await authService.login({ email, password });
-    sendSession(res, HttpStatus.OK, result);
+    res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
+    res.status(HttpStatus.OK).json({ user: result.user, accessToken: result.accessToken });
   };
 
   readonly refresh: RequestHandler = async (req, res) => {
     const { refreshToken } = req.body as { refreshToken: string };
     try {
       const result = await authService.refresh(refreshToken);
-      sendSession(res, HttpStatus.OK, result);
+      res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
+      res.status(HttpStatus.OK).json({ user: result.user, accessToken: result.accessToken });
     } catch (error) {
       if (error instanceof AppError && error.statusCode === HttpStatus.UNAUTHORIZED) {
-        clearRefreshCookie(res);
+        res.clearCookie(REFRESH_COOKIE_NAME, getClearRefreshCookieOptions());
       }
       throw error;
     }
@@ -55,7 +41,7 @@ export class AuthController {
 
   readonly logout: RequestHandler = async (req, res) => {
     const { refreshToken } = req.body as { refreshToken?: string };
-    clearRefreshCookie(res);
+    res.clearCookie(REFRESH_COOKIE_NAME, getClearRefreshCookieOptions());
     await authService.logout(refreshToken);
     res.status(HttpStatus.NO_CONTENT).end();
   };

@@ -62,6 +62,7 @@ describe("authentication routes", () => {
     const response = await send(
       "/auth/sign-up",
       JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: webOrigin },
     );
 
     expect(response.status).toBe(HttpStatus.CREATED);
@@ -77,6 +78,7 @@ describe("authentication routes", () => {
     const response = await send(
       "/auth/login",
       JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: webOrigin },
     );
 
     expect(response.status).toBe(HttpStatus.OK);
@@ -157,6 +159,7 @@ describe("authentication routes", () => {
     const invalid = await send(
       "/auth/sign-up",
       JSON.stringify({ email: "nope", password: "password" }),
+      { origin: webOrigin },
     );
 
     expect(invalid.status).toBe(HttpStatus.BAD_REQUEST);
