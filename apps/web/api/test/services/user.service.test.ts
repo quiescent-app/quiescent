@@ -28,7 +28,7 @@ describe("UserService", () => {
     service = new UserService();
   });
 
-  it("returns only safe current-user profile fields", async () => {
+  it("should return only safe current-user profile fields", async () => {
     mocks.userModel.findById.mockResolvedValue(user);
 
     await expect(service.getProfile(user.id)).resolves.toEqual({
@@ -40,15 +40,16 @@ describe("UserService", () => {
     });
   });
 
-  it("returns 404 when the authenticated user no longer exists", async () => {
+  it("should return 404 when the authenticated user no longer exists", async () => {
     mocks.userModel.findById.mockResolvedValue(null);
 
     await expect(service.getProfile(user.id)).rejects.toMatchObject({
       statusCode: HttpStatus.NOT_FOUND,
-    } satisfies Partial<AppError>);
+      message: "User not found",
+    });
   });
 
-  it("trims and saves a valid display name", async () => {
+  it("should trim and save a valid display name", async () => {
     mocks.userModel.updateDisplayName.mockResolvedValue({ ...user, displayName: "Reader One" });
 
     await expect(service.updateProfile(user.id, "  Reader One  ")).resolves.toMatchObject({
@@ -63,14 +64,14 @@ describe("UserService", () => {
     "     ",
     "x".repeat(41),
     "Reader!",
-  ])("rejects an invalid display name: %s", async (displayName) => {
+  ])("should reject an invalid display name: %s", async (displayName) => {
     await expect(service.updateProfile(user.id, displayName)).rejects.toMatchObject({
       statusCode: HttpStatus.BAD_REQUEST,
     } satisfies Partial<AppError>);
     expect(mocks.userModel.updateDisplayName).not.toHaveBeenCalled();
   });
 
-  it("returns 404 when updating a user that no longer exists", async () => {
+  it("should return 404 when updating a user that no longer exists", async () => {
     mocks.userModel.updateDisplayName.mockResolvedValue(null);
 
     await expect(service.updateProfile(user.id, "Reader One")).rejects.toMatchObject({
