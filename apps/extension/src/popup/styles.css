@@ -435,3 +435,57 @@ button:focus-visible {
     scroll-behavior: auto !important;
   }
 }
+
+.auth-section,
+.auth-account {
+  border-top: 1px solid #d3dcd6;
+  padding: 15px 0;
+}
+
+.auth-section h2 {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.auth-section form {
+  display: grid;
+  gap: 7px;
+}
+
+.auth-section label,
+.auth-account {
+  font-size: 12px;
+}
+
+.auth-section input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px;
+  border: 1px solid #aab7ad;
+  border-radius: 4px;
+  font: inherit;
+}
+
+.auth-section form button,
+.auth-account button {
+  min-height: 38px;
+  margin-top: 7px;
+  border: 0;
+  border-radius: 4px;
+  color: #fff;
+  background: #1a2c4a;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.auth-account {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.auth-account span { overflow: hidden; text-overflow: ellipsis; }
+.auth-account button { flex: 0 0 auto; padding: 0 10px; }
+.auth-link { margin-top: 10px; border: 0; background: none; color: #1a2c4a; text-decoration: underline; cursor: pointer; }
