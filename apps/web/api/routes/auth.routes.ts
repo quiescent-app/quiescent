@@ -56,8 +56,8 @@ const requireLogoutRefreshToken: RequestHandler = (req, _res, next) => {
 };
 const router = Router();
 
-router.post("/sign-up", requireCredentials, authController.signUp);
-router.post("/login", requireCredentials, authController.login);
+router.post("/sign-up", requireWebOrigin(), requireCredentials, authController.signUp);
+router.post("/login", requireWebOrigin(), requireCredentials, authController.login);
 router.post("/refresh", requireWebOrigin(), requireRefreshToken, authController.refresh);
 router.post("/logout", requireWebOrigin(), requireLogoutRefreshToken, authController.logout);
 

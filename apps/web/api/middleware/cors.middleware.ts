@@ -6,6 +6,11 @@ import { getWebOrigin } from "../utils/web-origin.js";
 const ALLOWED_METHODS = "GET,POST,PATCH,DELETE,OPTIONS";
 const ALLOWED_HEADERS = "Authorization,Content-Type";
 
+/**
+ * Sets CORS headers for the configured web origin and handles preflight requests.
+ *
+ * @returns Middleware that allows credentialed cross-origin requests from the web origin.
+ */
 export function corsMiddleware(): RequestHandler {
   const webOrigin = getWebOrigin();
 
