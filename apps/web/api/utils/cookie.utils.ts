@@ -1,6 +1,13 @@
 export const REFRESH_COOKIE_NAME = "quiescent_refresh";
 export const REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+/**
+ * Reads the refresh token from a Cookie header, for example:
+ * `POST /auth/refresh` with `Cookie: theme=dark; quiescent_refresh=abc123; lang=en`.
+ * The goal is to extract and return `abc123`.
+ * @param cookieHeader The raw `Cookie` header string from the request.
+ * @returns The refresh token if found and valid, otherwise `null`.
+ */
 export function readRefreshCookie(cookieHeader: string | undefined): string | null {
   if (!cookieHeader) return null;
 
@@ -25,11 +32,10 @@ export function getRefreshCookieOptions(environment: NodeJS.ProcessEnv = process
 }
 
 export function getClearRefreshCookieOptions(environment: NodeJS.ProcessEnv = process.env) {
-  const options = getRefreshCookieOptions(environment);
   return {
-    httpOnly: options.httpOnly,
-    secure: options.secure,
-    sameSite: options.sameSite,
-    path: options.path,
+    httpOnly: true,
+    secure: environment["NODE_ENV"] === "production",
+    sameSite: "lax" as const,
+    path: "/auth",
   };
 }
