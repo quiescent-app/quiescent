@@ -10,6 +10,13 @@ body {
 }
 
 @theme inline {
+  --color-library-background: var(--library-background);
+  --color-library-foreground: var(--library-foreground);
+  --color-library-border: var(--library-border);
+  --color-library-accent: var(--library-accent);
+  --color-library-accent-foreground: var(--library-accent-foreground);
+  --color-library-icon: var(--library-icon);
+  --color-library-muted-foreground: var(--library-muted-foreground);
   --font-heading: var(--font-sans);
   --font-sans: "Geist Variable", sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
@@ -53,6 +60,13 @@ body {
 }
 
 :root {
+  --library-background: #f3f6f3;
+  --library-foreground: #1a2c4b;
+  --library-border: #d3dcd7;
+  --library-accent: #e3edd9;
+  --library-accent-foreground: #385276;
+  --library-icon: #496080;
+  --library-muted-foreground: #587093;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);

@@ -1,41 +1,33 @@
 import { BookOpen } from "lucide-react";
 
 import { LibraryCard } from "@/components/custom/LibraryCard";
-
-export interface LibraryItem {
-  id: string;
-  title: string;
-  source: string;
-  type: "article" | "pdf";
-  savedAt: string;
-  progress: number;
-}
+import type { LibraryItem } from "@/types/library";
 
 // mock data:
 const mockLibraryItems: LibraryItem[] = [
   {
     id: "1",
     title: "The Quiet Math of Compounding",
-    source: "example.com",
+    domain: "example.com",
     type: "article",
-    savedAt: "2026-10-25",
-    progress: 34,
+    createdAt: "2026-10-25T12:00:00Z",
+    readingProgress: 34,
   },
   {
     id: "2",
     title: "The Hidden Cost of Switching",
-    source: "papers.example.edu",
+    domain: "papers.example.edu",
     type: "pdf",
-    savedAt: "2026-10-22",
-    progress: 20,
+    createdAt: "2026-10-22T12:00:00Z",
+    readingProgress: 20,
   },
   {
     id: "3",
     title: "The Wealth of Nations",
-    source: "Uploaded PDF",
+    domain: "Uploaded PDF",
     type: "pdf",
-    savedAt: "2026-10-19",
-    progress: 8,
+    createdAt: "2026-10-19T12:00:00Z",
+    readingProgress: 8,
   },
 ];
 
@@ -45,12 +37,12 @@ export default function LibraryPage({
   items?: readonly LibraryItem[];
 }) {
   return (
-    <main
+    <section
       aria-labelledby="library-title"
-      className="min-w-0 flex-1 bg-[#f3f6f3] px-4 pt-6 pb-16 text-[#1a2c4b] md:px-8 md:pt-10"
+      className="min-w-0 flex-1 bg-library-background px-4 pt-6 pb-16 text-library-foreground md:px-8 md:pt-10"
     >
       <div className="@container mx-auto w-full max-w-272">
-        <header className="flex items-baseline gap-6 border-b border-[#d3dcd7]">
+        <header className="flex items-baseline gap-6 border-b border-library-border">
           <h1 id="library-title" className="font-serif text-[28px] leading-10 font-normal">
             Library
           </h1>
@@ -58,11 +50,11 @@ export default function LibraryPage({
 
         {items.length === 0 ? (
           <div className="flex min-h-80 flex-col items-center justify-center px-6 py-16 text-center">
-            <span className="mb-5 flex size-14 items-center justify-center rounded-xl bg-[#e3edd9]">
-              <BookOpen className="size-7 text-[#496080]" aria-hidden="true" />
+            <span className="mb-5 flex size-14 items-center justify-center rounded-xl bg-library-accent">
+              <BookOpen className="size-7 text-library-icon" aria-hidden="true" />
             </span>
             <h2 className="font-serif text-2xl font-normal">Your library is empty</h2>
-            <p className="mt-2 max-w-sm text-sm leading-6 text-[#587093]">
+            <p className="mt-2 max-w-sm text-sm leading-6 text-library-muted-foreground">
               Articles and PDFs you save will appear here, along with your reading progress.
             </p>
           </div>
@@ -79,6 +71,6 @@ export default function LibraryPage({
           </ul>
         )}
       </div>
-    </main>
+    </section>
   );
 }
