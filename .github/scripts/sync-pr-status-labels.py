@@ -93,12 +93,10 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
                     name
                     status
                     conclusion
-                    isRequired(pullRequestNumber: $number)
                   }
                   ... on StatusContext {
                     context
                     state
-                    isRequired(pullRequestNumber: $number)
                   }
                 }
                 pageInfo { hasNextPage endCursor }
@@ -133,22 +131,27 @@ def get_pull_request(owner, name, number):
         if not page["pageInfo"]["hasNextPage"]:
             break
         cursor = page["pageInfo"]["endCursor"]
-    pull_request["checkContexts"] = contexts
+    # This workflow's own check is pending during evaluation, so it cannot
+    # count as a PR quality check for the label it is applying.
+    pull_request["checkContexts"] = [
+        context
+        for context in contexts
+        if not (
+            context["__typename"] == "CheckRun"
+            and context.get("name") == "synchronize-labels"
+        )
+    ]
     return pull_request
 
 
-def failed_required_check(context):
-    if not context.get("isRequired"):
-        return False
+def failed_check(context):
     if context["__typename"] == "CheckRun":
         return context.get("conclusion") in FAILED_CHECK_CONCLUSIONS
-    return context.get("state") == "ERROR"
+    return context.get("state") in {"FAILURE", "ERROR"}
 
 
-def required_checks_succeeded(contexts):
+def checks_succeeded(contexts):
     for context in contexts:
-        if not context.get("isRequired"):
-            continue
         if context["__typename"] == "CheckRun":
             if context.get("status") != "COMPLETED" or context.get("conclusion") not in ACCEPTED_CHECK_CONCLUSIONS:
                 return False
@@ -162,7 +165,7 @@ def determine_label(pull_request):
         return None
 
     contexts = pull_request["checkContexts"]
-    if any(failed_required_check(context) for context in contexts):
+    if any(failed_check(context) for context in contexts):
         return "Failed"
 
     if pull_request["mergeable"] == "CONFLICTING" or pull_request["mergeStateStatus"] == "DIRTY":
@@ -171,12 +174,11 @@ def determine_label(pull_request):
     if pull_request["reviewDecision"] in {"REVIEW_REQUIRED", "CHANGES_REQUESTED"}:
         return "Need Reviews"
 
-    checks_ready = required_checks_succeeded(contexts)
+    checks_ready = checks_succeeded(contexts)
     reviews_ready = pull_request["reviewDecision"] in {None, "", "APPROVED"}
-    # UNSTABLE can reflect optional checks; required contexts were checked above.
     merge_state_ready = (
         pull_request["mergeable"] == "MERGEABLE"
-        and pull_request["mergeStateStatus"] in {"CLEAN", "UNSTABLE"}
+        and pull_request["mergeStateStatus"] == "CLEAN"
     )
     if checks_ready and reviews_ready and merge_state_ready:
         return "Ready to merge"
@@ -268,11 +270,16 @@ def main():
     repository = os.environ["GITHUB_REPOSITORY"]
     owner, name = repository.split("/", 1)
     event = os.environ.get("GITHUB_EVENT_NAME", "")
+
+    # Identify which PRs need updating
     numbers = pull_request_numbers_from_event(event, repository)
     if not numbers:
         return
 
+    # Create label definitions
     ensure_labels(repository)
+
+    # Synchronize labels for each PR
     for number in numbers:
         synchronize_one(repository, owner, name, number)
 
