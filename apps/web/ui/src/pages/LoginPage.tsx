@@ -5,8 +5,6 @@ import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import "./auth.css";
-
 type ReturnLocation = { pathname?: string; search?: string; hash?: string };
 
 export default function LoginPage() {
@@ -25,8 +23,8 @@ export default function LoginPage() {
     setSubmitting(true);
     try {
       await login({ email, password });
-      const destination = returnTo?.pathname && returnTo.pathname !== "/login"
-        ? `${returnTo.pathname}${returnTo.search ?? ""}${returnTo.hash ?? ""}`
+      const destination = returnTo?.pathname 
+        ? returnTo.pathname + (returnTo.search ?? "") + (returnTo.hash ?? "")
         : "/library";
       navigate(destination, { replace: true });
     } catch (submitError) {
