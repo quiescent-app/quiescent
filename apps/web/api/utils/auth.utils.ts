@@ -8,8 +8,8 @@ export function normalizeEmail(email: string): string {
 }
 
 export function toAuthUser(user: User): AuthUser {
-  const { id, email, createdAt, updatedAt } = user;
-  return { id, email, createdAt, updatedAt };
+  const { id, email, displayName, createdAt, updatedAt } = user;
+  return { id, email, displayName, createdAt, updatedAt };
 }
 
 export function isEmailUniqueViolation(error: unknown): boolean {

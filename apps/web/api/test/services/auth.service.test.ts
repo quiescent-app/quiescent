@@ -15,6 +15,7 @@ function makeUser(overrides: Partial<User> = {}): User {
   return {
     id: "00000000-0000-4000-8000-000000000001",
     email: "reader@example.com",
+    displayName: null,
     password: "hashed:correct-password",
     createdAt: new Date("2026-01-01T00:00:00.000Z"),
     updatedAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -76,6 +77,7 @@ describe("AuthService", () => {
     expect(result.user).toEqual({
       id: user.id,
       email: user.email,
+      displayName: null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
