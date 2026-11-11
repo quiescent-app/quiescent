@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 
-import type {
-  ReadingProgressResponse,
-  ReadingProgressUpdate,
-} from "../types/readingProgress";
-import { getSaveConfiguration, previewFromTab, saveArticle, type ArticlePreview } from "./article";
+import type { ReadingProgressResponse, ReadingProgressUpdate } from "../types/readingProgress";
+import { requestAuth, type AuthStatus } from "../types/auth";
+import { previewFromTab, type ArticlePreview } from "./article";
 import "./styles.css";
 
 type ProgressState =
@@ -13,221 +11,48 @@ type ProgressState =
   | { status: "tracking"; progress: number }
   | { status: "unavailable"; message: string };
 
-export type SavePreviewState =
-  | "loading"
-  | "ready"
-  | "saving"
-  | "saved"
-  | "already-saved"
-  | "unsupported"
-  | "unavailable"
-  | "error"
-  | "offline";
-
-const previewStages: { label: string; state: SavePreviewState }[] = [
-  { label: "Checking", state: "loading" },
-  { label: "Ready", state: "ready" },
-  { label: "Saving", state: "saving" },
-  { label: "Saved", state: "saved" },
-  { label: "Already saved", state: "already-saved" },
-  { label: "Error", state: "error" },
-  { label: "Offline", state: "offline" },
-  { label: "Unsupported", state: "unsupported" },
-  { label: "Unavailable", state: "unavailable" },
-];
-
-const sampleArticle: ArticlePreview = {
-  title: "A sample article for preview",
-  url: "https://example.com/article",
-  source: "example.com",
-};
+type PageState = "loading" | "ready" | "unsupported" | "unavailable";
+type SessionState = "loading" | "signed-out" | "signed-in";
+type AuthView = "login" | "signup";
 
 const progressUnavailableMessage =
   "Reading progress isn't available on this page. Try a regular website instead.";
-
-function SaveNotice({ title, detail, offline = false }: { title: string; detail: string; offline?: boolean }) {
-  return (
-    <div className="save-alert" role="status">
-      <svg aria-hidden="true" className="save-alert-icon" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-        {offline ? (
-          <>
-            <path d="M3 3l18 18M5 9a12 12 0 0 1 11-2M8 12a7 7 0 0 1 7 1M11 16h2M3 12a16 16 0 0 1 2-2M17 9a16 16 0 0 1 4 3" />
-          </>
-        ) : (
-          <>
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 7v6M12 17h.01" />
-          </>
-        )}
-      </svg>
-      <div>
-        <h2>{title}</h2>
-        <p>{detail}</p>
-      </div>
-    </div>
-  );
-}
-
-function SavePreview({
-  state,
-  article,
-  configured,
-  previewMode,
-  onSave,
-}: {
-  state: SavePreviewState;
-  article: ArticlePreview | null;
-  configured: boolean;
-  previewMode: boolean;
-  onSave: () => void;
-}) {
-  if (state === "loading") {
-    return <section aria-label="Save article" className="save-preview" role="status">Checking page…</section>;
-  }
-
-  if (state === "unsupported" || state === "unavailable" || !article) {
-    return (
-      <section aria-label="Save article" className="save-preview">
-        <SaveNotice
-          title={state === "unavailable" ? "This page can’t be checked" : "Unsupported page"}
-          detail={state === "unavailable" ? "Close and reopen Quiescent to try again." : "Open a regular website to save it to Quiescent."}
-        />
-      </section>
-    );
-  }
-
-  const status = state === "saving"
-    ? "Saving…"
-    : state === "saved"
-      ? "Saved to Read later"
-      : state === "already-saved"
-        ? "Already in your library"
-        : null;
-
-  return (
-    <section aria-label="Save article" className="save-preview">
-      {state === "error" && <SaveNotice title="Couldn’t save this article" detail="Nothing was saved. Try again." />}
-      {state === "offline" && <SaveNotice title="Couldn’t save, you’re offline" detail="Nothing was saved." offline />}
-      {status && (
-        <p className={`save-status ${state === "saving" ? "is-saving" : ""}`} role="status">
-          <span aria-hidden="true">{state === "saving" ? "◌" : "✓"}</span>
-          {status}
-        </p>
-      )}
-      {state !== "error" && state !== "offline" && <p className="preview-label">Current page</p>}
-      <article className="article-card">
-        <p className="article-source">{article.source}</p>
-        <h2>{article.title}</h2>
-        <p className="article-url" title={article.url}>{article.url}</p>
-      </article>
-      <button
-        className="save-button"
-        disabled={previewMode || !configured || state === "saving" || state === "saved" || state === "already-saved" || state === "offline"}
-        onClick={onSave}
-        type="button"
-      >
-        {state === "saving" ? "Saving…" : state === "already-saved" ? "Already saved" : state === "saved" ? "Saved" : state === "error" || state === "offline" ? "Retry" : "Add to Quiescent"}
-      </button>
-      {!previewMode && !configured && <p className="save-hint status-error" role="status">Set the API URL and test user ID to enable saving.</p>}
-    </section>
-  );
-}
+const webOrigin = import.meta.env.VITE_WEB_BASE_URL || "http://localhost:5173";
 
 function App() {
-  const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
-  const [saveState, setSaveState] = useState<SavePreviewState>("loading");
-  const [previewState, setPreviewState] = useState<SavePreviewState | null>(null);
+  const [sessionState, setSessionState] = useState<SessionState>("loading");
+  const [session, setSession] = useState<AuthStatus>({ authenticated: false });
+  const [authView, setAuthView] = useState<AuthView>("login");
+  const [authError, setAuthError] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+  const [pageState, setPageState] = useState<PageState>("loading");
   const [article, setArticle] = useState<ArticlePreview | null>(null);
-  const articleRef = useRef<ArticlePreview | null>(null);
-  const activeTabId = useRef<number | null>(null);
-  const pageRequestId = useRef(0);
-  const saveRequestId = useRef(0);
-  const savingRef = useRef(false);
+  const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
   const trackedTabId = useRef<number | null>(null);
   const trackedPageUrl = useRef<string | null>(null);
-  const configuration = getSaveConfiguration();
-  const previewEnabled = import.meta.env.VITE_ENABLE_STATE_PREVIEW === "true";
-  const activePreview = previewEnabled ? previewState : null;
 
   const updatePage = useCallback(async () => {
-    const requestId = ++pageRequestId.current;
-    articleRef.current = null;
-    saveRequestId.current++;
-    savingRef.current = false;
+    setPageState("loading");
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (requestId !== pageRequestId.current) return;
-      activeTabId.current = tab?.id ?? null;
       const preview = previewFromTab(tab);
-      articleRef.current = preview;
       setArticle(preview);
-      setSaveState(preview ? "ready" : "unsupported");
+      setPageState(preview ? "ready" : "unsupported");
     } catch {
-      if (requestId !== pageRequestId.current) return;
-      activeTabId.current = null;
-      articleRef.current = null;
       setArticle(null);
-      setSaveState("unavailable");
+      setPageState("unavailable");
     }
   }, []);
 
-  const handleSave = async () => {
-    const preview = articleRef.current;
-    if (!preview || !configuration || activePreview !== null || savingRef.current || saveState === "saved" || saveState === "already-saved") return;
-    const requestId = ++saveRequestId.current;
-    savingRef.current = true;
-    setSaveState("saving");
-    try {
-      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const currentPreview = previewFromTab(currentTab);
-      if (requestId !== saveRequestId.current) return;
-      if (currentTab?.id !== activeTabId.current || !currentPreview ||
-        currentPreview.url !== preview.url || currentPreview.title !== preview.title) {
-        savingRef.current = false;
-        void updatePage();
-        return;
-      }
-
-      const result = await saveArticle(preview, configuration);
-      if (requestId === saveRequestId.current) {
-        savingRef.current = false;
-        setSaveState(result);
-      }
-    } catch {
-      if (requestId === saveRequestId.current) {
-        savingRef.current = false;
-        setSaveState("error");
-      }
-    }
-  };
-
-  const handleOpenWeb = () => {
-    window.open("http://localhost:5173", "_blank");
-  };
-
   const startReadingProgress = useCallback(async () => {
     setProgressState({ status: "loading" });
-
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      if (tab?.id === undefined || !tab.url?.match(/^(https?|file):/)) {
-        trackedTabId.current = null;
-        trackedPageUrl.current = null;
-        setProgressState({ status: "unavailable", message: progressUnavailableMessage });
-        return;
-      }
-
+      if (tab?.id === undefined || !tab.url?.match(/^(https?|file):/)) throw new Error();
       trackedTabId.current = tab.id;
       trackedPageUrl.current = tab.url;
-      const response = (await chrome.tabs.sendMessage(tab.id, {
-        type: "START_READING_PROGRESS",
-      })) as ReadingProgressResponse | undefined;
-
-      if (!response?.ok || !Number.isFinite(response.progress)) {
-        throw new Error("The page did not return a reading position.");
-      }
-
+      const response = await chrome.tabs.sendMessage(tab.id, { type: "START_READING_PROGRESS" }) as ReadingProgressResponse | undefined;
+      if (!response?.ok || !Number.isFinite(response.progress)) throw new Error();
       setProgressState({ status: "tracking", progress: response.progress });
     } catch {
       trackedTabId.current = null;
@@ -237,62 +62,116 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const pageRequestRef = pageRequestId;
-    const saveRequestRef = saveRequestId;
+    let active = true;
+    void requestAuth({ type: "AUTH_STATUS" }).then((reply) => {
+      if (!active) return;
+      if (reply.ok) {
+        setSession(reply.status);
+        setSessionState(reply.status.authenticated ? "signed-in" : "signed-out");
+      } else {
+        setAuthError(reply.message);
+        setSessionState("signed-out");
+      }
+    }).catch(() => {
+      if (active) {
+        setAuthError("Could not connect to the extension session. Reopen Quiescent.");
+        setSessionState("signed-out");
+      }
+    });
     void Promise.resolve().then(updatePage);
-
-    const handleProgressUpdate = (
-      message: ReadingProgressUpdate,
-      sender: chrome.runtime.MessageSender,
-    ) => {
-      if (
-        message.type === "READING_PROGRESS_UPDATE" &&
-        sender.tab?.id === trackedTabId.current &&
-        message.url === trackedPageUrl.current &&
-        Number.isFinite(message.progress)
-      ) {
-        setProgressState({ status: "tracking", progress: message.progress });
-      }
-    };
-
-    const handleActiveTabChanged = () => {
-      setSaveState("loading");
+    const onTabChange = () => {
+      trackedTabId.current = null;
+      trackedPageUrl.current = null;
+      setProgressState({ status: "idle" });
       void updatePage();
-      if (trackedTabId.current !== null) void startReadingProgress();
     };
-
-    const handleTabUpdated = (
-      tabId: number,
-      changeInfo: { status?: string; url?: string; title?: string },
-    ) => {
-      if (tabId === activeTabId.current && (changeInfo.url || changeInfo.title || changeInfo.status === "complete")) {
-        setSaveState("loading");
-        void updatePage();
-      }
+    const onTabUpdated = (tabId: number, changeInfo: { url?: string; title?: string; status?: string }) => {
+      if (changeInfo.url || changeInfo.title || changeInfo.status === "complete") void updatePage();
       if (tabId !== trackedTabId.current) return;
-
       if (changeInfo.url) {
         trackedPageUrl.current = changeInfo.url;
         setProgressState({ status: "loading" });
       }
-
       if (changeInfo.status === "complete") void startReadingProgress();
     };
-
-    chrome.runtime.onMessage.addListener(handleProgressUpdate);
-    chrome.tabs.onActivated.addListener(handleActiveTabChanged);
-    chrome.tabs.onUpdated.addListener(handleTabUpdated);
-
+    chrome.tabs.onActivated.addListener(onTabChange);
+    chrome.tabs.onUpdated.addListener(onTabUpdated);
     return () => {
-      pageRequestRef.current++;
-      saveRequestRef.current++;
-      chrome.runtime.onMessage.removeListener(handleProgressUpdate);
-      chrome.tabs.onActivated.removeListener(handleActiveTabChanged);
-      chrome.tabs.onUpdated.removeListener(handleTabUpdated);
+      active = false;
+      chrome.tabs.onActivated.removeListener(onTabChange);
+      chrome.tabs.onUpdated.removeListener(onTabUpdated);
     };
-  }, [startReadingProgress, updatePage]);
+  }, [updatePage, startReadingProgress]);
 
-  const progress = progressState.status === "tracking" ? progressState.progress : 0;
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authBusy) return;
+    const values = new FormData(event.currentTarget);
+    const email = String(values.get("email") ?? "").trim();
+    const password = String(values.get("password") ?? "");
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const reply = await requestAuth({ type: "AUTH_LOGIN", email, password });
+      if (!reply.ok) throw new Error(reply.message);
+      setSession(reply.status);
+      setSessionState("signed-in");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not sign in.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  const handleSignup = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (authBusy) return;
+    const values = new FormData(event.currentTarget);
+    const email = String(values.get("signup-email") ?? "").trim();
+    const password = String(values.get("signup-password") ?? "");
+    const confirmation = String(values.get("signup-confirmation") ?? "");
+    if (password !== confirmation) { setAuthError("Passwords do not match."); return; }
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const response = await fetch(new URL("/auth/sign-up", import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"), {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
+        throw new Error(body?.error?.message || `Could not create account (${response.status}).`);
+      }
+      setAuthView("login");
+      setAuthError("Account created. Sign in to continue.");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not create account.");
+    } finally { setAuthBusy(false); }
+  };
+  const handleLogout = async () => {
+    setAuthBusy(true);
+    setAuthError("");
+    try {
+      const reply = await requestAuth({ type: "AUTH_LOGOUT" });
+      if (!reply.ok) throw new Error(reply.message);
+      setSession({ authenticated: false });
+      setSessionState("signed-out");
+    } catch (error) {
+      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
+    } finally {
+      setAuthBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    const listener = (message: ReadingProgressUpdate, sender: chrome.runtime.MessageSender) => {
+      if (message.type === "READING_PROGRESS_UPDATE" && sender.tab?.id === trackedTabId.current && message.url === trackedPageUrl.current && Number.isFinite(message.progress)) {
+        setProgressState({ status: "tracking", progress: message.progress });
+      }
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    return () => chrome.runtime.onMessage.removeListener(listener);
+  }, []);
 
   return (
     <main className="popup-shell">
@@ -302,80 +181,73 @@ function App() {
           <h1>Quiescent</h1>
         </div>
         <div className="header-actions">
-          <button className="app-link" onClick={handleOpenWeb} type="button">Open app</button>
+          <button className="app-link" onClick={() => window.open(webOrigin, "_blank")} type="button">Open app</button>
           <button aria-label="Close Quiescent" className="close-button" onClick={() => window.close()} type="button">×</button>
         </div>
       </header>
 
-      <SavePreview
-        state={activePreview ?? saveState}
-        article={activePreview === null ? article : article ?? sampleArticle}
-        configured={configuration !== null}
-        previewMode={activePreview !== null}
-        onSave={() => void handleSave()}
-      />
-
-      {previewEnabled && (
-        <section aria-label="Save state preview" className="state-preview">
-          <h2>Preview save states</h2>
-          <div className="state-preview-buttons">
-            <button
-              aria-pressed={activePreview === null}
-              onClick={() => setPreviewState(null)}
-              type="button"
-            >
-              Live
-            </button>
-            {previewStages.map(({ label, state }) => (
-              <button
-                aria-pressed={activePreview === state}
-                key={state}
-                onClick={() => setPreviewState(state)}
-                type="button"
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+      {sessionState === "loading" && <p role="status">Restoring session…</p>}
+      {sessionState === "signed-out" && (
+        <section aria-label={authView === "login" ? "Sign in" : "Create account"} className="auth-section">
+          <h2>{authView === "login" ? "Sign in to Quiescent" : "Create your account"}</h2>
+          {authView === "login" ? (
+            <form onSubmit={(event) => void handleLogin(event)}>
+              <label htmlFor="email">Email</label><input autoComplete="email" id="email" name="email" required type="email" />
+              <label htmlFor="password">Password</label><input autoComplete="current-password" id="password" name="password" required type="password" />
+              <button disabled={authBusy} type="submit">{authBusy ? "Signing in…" : "Sign in"}</button>
+            </form>
+          ) : (
+            <form onSubmit={(event) => void handleSignup(event)}>
+              <label htmlFor="signup-email">Email</label><input autoComplete="email" id="signup-email" name="signup-email" required type="email" />
+              <label htmlFor="signup-password">Password</label><input autoComplete="new-password" id="signup-password" minLength={8} name="signup-password" required type="password" />
+              <label htmlFor="signup-confirmation">Confirm password</label><input autoComplete="new-password" id="signup-confirmation" minLength={8} name="signup-confirmation" required type="password" />
+              <button disabled={authBusy} type="submit">{authBusy ? "Creating account…" : "Create account"}</button>
+            </form>
+          )}
+          <button className="auth-link" onClick={() => { setAuthView(authView === "login" ? "signup" : "login"); setAuthError(""); }} type="button">
+            {authView === "login" ? "Create an account" : "Back to sign in"}
+          </button>
+        </section>
+      )}      {sessionState === "signed-in" && (
+        <section aria-label="Account" className="auth-account">
+          <span>Signed in as {session.email}</span>
+          <button disabled={authBusy} onClick={() => void handleLogout()} type="button">Sign out</button>
         </section>
       )}
+      {authError && <p className="status-error" role="alert">{authError}</p>}
+
+      <section aria-label="Save article" className="save-preview">
+        {pageState === "loading" && <p role="status">Checking page…</p>}
+        {pageState === "unsupported" && <p role="status">Open a regular website to save it to Quiescent.</p>}
+        {pageState === "unavailable" && <p role="status">This page can't be checked. Reopen Quiescent to try again.</p>}
+        {pageState === "ready" && article && (
+          <>
+            <p className="preview-label">Current page</p>
+            <article className="article-card">
+              <p className="article-source">{article.source}</p>
+              <h2>{article.title}</h2>
+              <p className="article-url" title={article.url}>{article.url}</p>
+            </article>
+            <button className="save-button" disabled type="button">Add to Quiescent</button>
+            <p className="save-hint">Article saving is coming soon.</p>
+          </>
+        )}
+      </section>
 
       <section aria-label="Reading progress" className="progress-section" aria-live="polite">
-        <button
-          className="progress-button"
-          disabled={progressState.status === "loading"}
-          onClick={() => void startReadingProgress()}
-          type="button"
-        >
+        <button className="progress-button" disabled={progressState.status === "loading"} onClick={() => void startReadingProgress()} type="button">
           {progressState.status === "loading" ? "Checking page…" : "Reading progress"}
         </button>
-
-        {progressState.status === "idle" && (
-          <p className="status-copy">See where you are in the article.</p>
-        )}
-        {progressState.status === "loading" && (
-          <p className="status-copy">Calculating your position…</p>
-        )}
+        {progressState.status === "idle" && <p className="status-copy">See where you are in the article.</p>}
+        {progressState.status === "loading" && <p className="status-copy">Calculating your position…</p>}
+        {progressState.status === "unavailable" && <p className="status-copy status-error" role="status">{progressState.message}</p>}
         {progressState.status === "tracking" && (
           <div className="progress-result">
-            <div className="progress-value">
-              <span>Reading progress</span>
-              <strong>{progress}%</strong>
-            </div>
-            <div
-              aria-label={`Reading progress: ${progress}%`}
-              aria-valuemax={100}
-              aria-valuemin={0}
-              aria-valuenow={progress}
-              className="progress-track"
-              role="progressbar"
-            >
-              <span style={{ width: `${progress}%` }} />
+            <div className="progress-value"><span>Reading progress</span><strong>{progressState.progress}%</strong></div>
+            <div aria-label={`Reading progress: ${progressState.progress}%`} aria-valuemax={100} aria-valuemin={0} aria-valuenow={progressState.progress} className="progress-track" role="progressbar">
+              <span style={{ width: `${progressState.progress}%` }} />
             </div>
           </div>
-        )}
-        {progressState.status === "unavailable" && (
-          <p className="status-copy status-error" role="status">{progressState.message}</p>
         )}
       </section>
     </main>
@@ -383,3 +255,4 @@ function App() {
 }
 
 export default App;
+
