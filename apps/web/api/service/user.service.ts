@@ -5,7 +5,7 @@ import { toAuthUser } from "../utils/auth.utils.js";
 const DISPLAY_NAME_PATTERN = /^[\p{L}\p{N} ._-]+$/u;
 
 export function normalizeDisplayName(displayName: string): string {
-  const normalized = displayName.trim();
+  const normalized = displayName.normalize("NFC").trim();
   const length = Array.from(normalized).length;
 
   if (length < 1 || length > 40 || !DISPLAY_NAME_PATTERN.test(normalized)) {
