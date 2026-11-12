@@ -2,7 +2,6 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, HttpStatus } from "../../errors/appError.js";
-import { S3PhotoStorage } from "../../service/s3-photo.storage.js";
 
 import {
   PHOTO_MAX_SIZE_BYTES,
@@ -32,17 +31,15 @@ describe("UploadService", () => {
       create: { width: 2, height: 3, channels: 3, background: "red" },
     }).png().toBuffer();
     storage = {
-      createUploadTarget: vi.spyOn(S3PhotoStorage.prototype, "createUploadTarget")
-        .mockResolvedValue({ url: "https://s3.example/upload", fields: {} }),
-      inspect: vi.spyOn(S3PhotoStorage.prototype, "inspect")
-        .mockResolvedValue({ sizeBytes: png.length }),
-      read: vi.spyOn(S3PhotoStorage.prototype, "read").mockResolvedValue(png),
-      copy: vi.spyOn(S3PhotoStorage.prototype, "copy").mockResolvedValue(undefined),
-      createReadUrl: vi.spyOn(S3PhotoStorage.prototype, "createReadUrl")
-        .mockResolvedValue("https://s3.example/read"),
-      delete: vi.spyOn(S3PhotoStorage.prototype, "delete").mockResolvedValue(undefined),
-    } as PhotoStorage;
+      createUploadTarget: vi.fn().mockResolvedValue({ url: "https://s3.example/upload", fields: {} }),
+      inspect: vi.fn().mockResolvedValue({ sizeBytes: png.length }),
+      read: vi.fn().mockResolvedValue(png),
+      copy: vi.fn().mockResolvedValue(undefined),
+      createReadUrl: vi.fn().mockResolvedValue("https://s3.example/read"),
+      delete: vi.fn().mockResolvedValue(undefined),
+    };
     service = new UploadService();
+    (service as unknown as { storage: PhotoStorage }).storage = storage;
     pending = {
       id: "upload-id",
       ownerId: "user-id",
@@ -58,13 +55,18 @@ describe("UploadService", () => {
     vi.unstubAllEnvs();
   });
 
-  it("requires a configured AWS region and photo bucket", () => {
+  it("requires a configured AWS region and photo bucket", async () => {
     vi.stubEnv("AWS_REGION", "");
-    expect(() => new UploadService()).toThrow("AWS_REGION and S3_PHOTO_BUCKET");
+    const unconfiguredService = new UploadService();
+    await expect(unconfiguredService.prepareUpload("user-id", {
+      contentType: "image/png", sizeBytes: 1,
+    })).rejects.toThrow("AWS_REGION and S3_PHOTO_BUCKET");
 
     vi.stubEnv("AWS_REGION", "us-east-2");
     vi.stubEnv("S3_PHOTO_BUCKET", "");
-    expect(() => new UploadService()).toThrow("AWS_REGION and S3_PHOTO_BUCKET");
+    await expect(new UploadService().prepareUpload("user-id", {
+      contentType: "image/png", sizeBytes: 1,
+    })).rejects.toThrow("AWS_REGION and S3_PHOTO_BUCKET");
   });
 
   it("prepares a bounded upload with a generated key", async () => {

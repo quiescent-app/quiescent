@@ -10,7 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, HttpStatus } from "../../errors/appError.js";
-import { S3PhotoStorage } from "../../service/s3-photo.storage.js";
+import { createS3PhotoStorage } from "../../service/s3-photo.storage.js";
 
 // Keep signing local while asserting the policy passed to the AWS helpers.
 vi.mock("@aws-sdk/s3-presigned-post", () => ({
@@ -22,17 +22,17 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({
   getSignedUrl: vi.fn().mockResolvedValue("https://s3.example/read"),
 }));
 
-describe("S3PhotoStorage", () => {
+describe("createS3PhotoStorage", () => {
   const bucket = "quiescent-photos-dev";
   let send: ReturnType<typeof vi.fn>;
   let client: S3Client;
-  let storage: S3PhotoStorage;
+  let storage: ReturnType<typeof createS3PhotoStorage>;
 
   beforeEach(() => {
     // A fake client captures SDK commands without contacting S3.
     send = vi.fn();
     client = { send } as unknown as S3Client;
-    storage = new S3PhotoStorage(client, bucket);
+    storage = createS3PhotoStorage(client, bucket);
   });
 
   it("signs a private upload form for the exact key, type, size, and lifetime", async () => {
