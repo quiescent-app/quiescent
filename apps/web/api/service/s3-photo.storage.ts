@@ -15,15 +15,11 @@ import type {
   StoredObject,
 } from "./upload.service.js";
 
-export class S3PhotoStorage implements PhotoStorage {
-  /** Bind all storage operations to one environment's bucket. */
-  constructor(
-    private readonly client: S3Client,
-    private readonly bucket: string,
-  ) {
-    if (!bucket) throw new Error("Photo bucket is required");
-  }
+/** Bind storage operations to one environment's bucket without a class instance. */
+export function createS3PhotoStorage(client: S3Client, bucket: string): PhotoStorage {
+  if (!bucket) throw new Error("Photo bucket is required");
 
+  return {
   /** Create a presigned POST with an exact key, media type, size cap, and expiry. */
   async createUploadTarget(
     key: string,
@@ -31,8 +27,8 @@ export class S3PhotoStorage implements PhotoStorage {
     maxSizeBytes: number,
     expiresInSeconds: number,
   ): Promise<{ url: string; fields: Record<string, string> }> {
-    return createPresignedPost(this.client, {
-      Bucket: this.bucket,
+    return createPresignedPost(client, {
+      Bucket: bucket,
       Key: key,
       Conditions: [
         ["content-length-range", 1, maxSizeBytes],
@@ -41,13 +37,13 @@ export class S3PhotoStorage implements PhotoStorage {
       Fields: { "Content-Type": contentType },
       Expires: expiresInSeconds,
     });
-  }
+  },
 
   /** Read object metadata without downloading its contents. */
   async inspect(key: string): Promise<StoredObject | null> {
     try {
-      const object = await this.client.send(new HeadObjectCommand({
-        Bucket: this.bucket,
+      const object = await client.send(new HeadObjectCommand({
+        Bucket: bucket,
         Key: key,
       }));
       if (object.ContentLength === undefined) {
@@ -58,13 +54,13 @@ export class S3PhotoStorage implements PhotoStorage {
       if (isMissingObject(error)) return null;
       throw error;
     }
-  }
+  },
 
   /** Stream a bounded byte range so image validation cannot load an oversized object. */
   async read(key: string, maxBytes: number): Promise<Buffer> {
     // Range bounds memory even if a pending key changes after its HEAD request.
-    const response = await this.client.send(new GetObjectCommand({
-      Bucket: this.bucket,
+    const response = await client.send(new GetObjectCommand({
+      Bucket: bucket,
       Key: key,
       Range: `bytes=0-${maxBytes}`,
     }));
@@ -84,32 +80,33 @@ export class S3PhotoStorage implements PhotoStorage {
       chunks.push(bytes);
     }
     return Buffer.concat(chunks, size);
-  }
+  },
 
   /** Promote a pending object by copying it to a separate final key. */
   async copy(sourceKey: string, destinationKey: string): Promise<void> {
-    await this.client.send(new CopyObjectCommand({
-      Bucket: this.bucket,
+    await client.send(new CopyObjectCommand({
+      Bucket: bucket,
       Key: destinationKey,
-      CopySource: `${this.bucket}/${sourceKey.split("/").map(encodeURIComponent).join("/")}`,
+      CopySource: `${bucket}/${sourceKey.split("/").map(encodeURIComponent).join("/")}`,
     }));
-  }
+  },
 
   /** Sign a temporary GET request for an authorized photo. */
   async createReadUrl(key: string, expiresInSeconds: number): Promise<string> {
-    return getSignedUrl(this.client, new GetObjectCommand({
-      Bucket: this.bucket,
+    return getSignedUrl(client, new GetObjectCommand({
+      Bucket: bucket,
       Key: key,
     }), { expiresIn: expiresInSeconds });
-  }
+  },
 
   /** Delete an object from this adapter's bucket. */
   async delete(key: string): Promise<void> {
-    await this.client.send(new DeleteObjectCommand({
-      Bucket: this.bucket,
+    await client.send(new DeleteObjectCommand({
+      Bucket: bucket,
       Key: key,
     }));
-  }
+  },
+  };
 }
 
 /** Recognize S3's missing-object responses while preserving other errors. */
