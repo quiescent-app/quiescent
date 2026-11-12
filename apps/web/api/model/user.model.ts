@@ -33,6 +33,16 @@ export class UserModel {
 
     return user ?? null;
   }
+
+  async updateDisplayName(id: string, displayName: string): Promise<User | null> {
+    const [user] = await database
+      .update(users)
+      .set({ displayName, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+
+    return user ?? null;
+  }
 }
 
 export const userModel = new UserModel();

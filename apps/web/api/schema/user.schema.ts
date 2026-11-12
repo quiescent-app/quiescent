@@ -5,6 +5,7 @@ export const users = pgTable(
   {
     id: uuid("id").defaultRandom().primaryKey(),
     email: text("email").notNull(),
+    displayName: text("display_name"),
     password: text("password").notNull(),
     createdAt: timestamp("created_at", { mode: "date", withTimezone: true })
       .defaultNow()
@@ -19,4 +20,7 @@ export const users = pgTable(
 
 export type User = typeof users.$inferSelect;
 
-export type AuthUser = Pick<User, "id" | "email" | "createdAt" | "updatedAt">;
+export type AuthUser = Pick<
+  User,
+  "id" | "email" | "displayName" | "createdAt" | "updatedAt"
+>;
