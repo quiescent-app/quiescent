@@ -4,7 +4,7 @@ import { S3Client } from "@aws-sdk/client-s3";
 import sharp from "sharp";
 
 import { AppError, HttpStatus } from "../errors/appError.js";
-import { S3PhotoStorage } from "./s3-photo.storage.js";
+import { createS3PhotoStorage } from "./s3-photo.storage.js";
 
 export const PHOTO_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const PHOTO_UPLOAD_TTL_SECONDS = 300;
@@ -71,13 +71,14 @@ export interface ReadyPhoto {
 }
 
 export class UploadService {
-  private readonly storage: PhotoStorage = createPhotoStorage();
+  private storage: PhotoStorage | undefined;
 
   /** Validate the declared upload and create its pending record and S3 form. */
   async prepareUpload(
     ownerId: string,
     input: { contentType: string; sizeBytes: number },
   ): Promise<{ pending: PendingPhotoUpload; target: UploadTarget }> {
+    const storage = this.getStorage();
     if (!ownerId) throw new AppError(HttpStatus.BAD_REQUEST, "Photo owner is required");
     if (!contentTypes.has(input.contentType)) {
       throw new AppError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported photo type");
@@ -94,7 +95,7 @@ export class UploadService {
     const pendingKey = `pending/${id}`;
     const contentType = input.contentType as PhotoContentType;
     const expiresAt = new Date(Date.now() + PHOTO_UPLOAD_TTL_SECONDS * 1000);
-    const target = await this.storage.createUploadTarget(
+    const target = await storage.createUploadTarget(
       pendingKey,
       contentType,
       PHOTO_MAX_SIZE_BYTES,
@@ -109,11 +110,12 @@ export class UploadService {
 
   /** Validate a trusted pending upload and return metadata for its final copy. */
   async completeUpload(pending: PendingPhotoUpload): Promise<ReadyPhoto> {
+    const storage = this.getStorage();
     if (pending.expiresAt.getTime() <= Date.now()) {
       throw new AppError(HttpStatus.BAD_REQUEST, "Photo upload has expired");
     }
 
-    const source = await this.storage.inspect(pending.pendingKey);
+    const source = await storage.inspect(pending.pendingKey);
     if (!source) throw new AppError(HttpStatus.NOT_FOUND, "Photo upload is missing");
     if (source.sizeBytes !== pending.declaredSizeBytes || source.sizeBytes > PHOTO_MAX_SIZE_BYTES) {
       throw new AppError(HttpStatus.BAD_REQUEST, "Uploaded photo size does not match");
@@ -121,14 +123,14 @@ export class UploadService {
 
     const id = randomUUID();
     const objectKey = `photos/${id}`;
-    await this.storage.copy(pending.pendingKey, objectKey);
+    await storage.copy(pending.pendingKey, objectKey);
 
     try {
-      const final = await this.storage.inspect(objectKey);
+      const final = await storage.inspect(objectKey);
       if (!final || final.sizeBytes !== pending.declaredSizeBytes) {
         throw new AppError(HttpStatus.BAD_REQUEST, "Copied photo size does not match");
       }
-      const bytes = await this.storage.read(objectKey, PHOTO_MAX_SIZE_BYTES);
+      const bytes = await storage.read(objectKey, PHOTO_MAX_SIZE_BYTES);
       if (bytes.length !== final.sizeBytes) {
         throw new AppError(HttpStatus.BAD_REQUEST, "Copied photo bytes are incomplete");
       }
@@ -137,7 +139,7 @@ export class UploadService {
       // A failure to remove the pending object is safe: a later cleanup pass
       // can remove it without changing the immutable final object.
       try {
-        await this.storage.delete(pending.pendingKey);
+        await storage.delete(pending.pendingKey);
       } catch {
         // Deferred cleanup is the responsibility of the future persistence layer.
       }
@@ -152,7 +154,7 @@ export class UploadService {
       };
     } catch (error) {
       try {
-        await this.storage.delete(objectKey);
+        await storage.delete(objectKey);
       } catch {
         throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
       }
@@ -162,14 +164,21 @@ export class UploadService {
 
   /** Sign a read URL for a ready photo already authorized by the caller. */
   async createReadUrl(photo: ReadyPhoto): Promise<string> {
-    return this.storage.createReadUrl(photo.objectKey, PHOTO_READ_TTL_SECONDS);
+    return this.getStorage().createReadUrl(photo.objectKey, PHOTO_READ_TTL_SECONDS);
   }
 
   /** Delete a ready photo after the caller has removed its references. */
   async deletePhoto(photo: ReadyPhoto): Promise<void> {
-    await this.storage.delete(photo.objectKey);
+    await this.getStorage().delete(photo.objectKey);
+  }
+
+  private getStorage(): PhotoStorage {
+    this.storage ??= createPhotoStorage();
+    return this.storage;
   }
 }
+
+export const uploadService = new UploadService();
 
 /** Configure the directly imported S3 adapter for this backend environment. */
 function createPhotoStorage(): PhotoStorage {
@@ -178,7 +187,7 @@ function createPhotoStorage(): PhotoStorage {
   if (!region || !bucket) {
     throw new Error("AWS_REGION and S3_PHOTO_BUCKET are required for photo storage");
   }
-  return new S3PhotoStorage(new S3Client({ region }), bucket);
+  return createS3PhotoStorage(new S3Client({ region }), bucket);
 }
 
 /** Decode the full image and confirm its type, dimensions, and single-frame policy. */
