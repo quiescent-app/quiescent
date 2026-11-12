@@ -5,6 +5,15 @@ import { describe, expect, it, vi } from "vitest";
 import App from "../src/App";
 import AuthProvider from "../src/auth/AuthProvider";
 
+vi.mock("../src/auth/authApi", () => ({
+  refreshSession: vi.fn().mockResolvedValue(null),
+  subscribeToAuthLoss: vi.fn(() => () => undefined),
+  clearAccessToken: vi.fn(),
+  login: vi.fn(),
+  signUp: vi.fn(),
+  logout: vi.fn(),
+}));
+
 vi.mock("../src/hooks/use-mobile", () => ({
   useIsMobile: () => false,
 }));
