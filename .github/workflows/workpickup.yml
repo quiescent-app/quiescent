@@ -1,0 +1,89 @@
+name: Work Pickup CI
+
+on:
+  issues:
+    types: [assigned]
+
+permissions:
+  contents: read
+
+jobs:
+  pickup:
+    # Self-assignment, and the assigner is the only assignee (picked up from unassigned)
+    if: >-
+      github.event.sender.login == github.event.assignee.login &&
+      join(github.event.issue.assignees.*.login, ',') == github.event.assignee.login
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Create GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3.3.0
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Read current status
+        id: read
+        continue-on-error: true # fails if the issue isn't on the Task board -> just skip the rest
+        uses: github/update-project-action@v4
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          organization: quiescent-app
+          project_number: 1
+          content_id: ${{ github.event.issue.node_id }}
+          field: Status
+          operation: read
+
+      - name: Move to In progress
+        id: move
+        if: steps.read.outputs.field_read_value == 'Ready'
+        uses: github/update-project-action@v4
+        with:
+          github_token: ${{ steps.app-token.outputs.token }}
+          organization: quiescent-app
+          project_number: 1
+          content_id: ${{ github.event.issue.node_id }}
+          field: Status
+          value: In progress
+
+      - name: Send Slack Notification
+        if: ${{ always() && steps.read.outputs.field_read_value == 'Ready' }}
+        uses: slackapi/slack-github-action@v4.0.0
+        with:
+          method: chat.postMessage
+          token: ${{ secrets.SLACK_BOT_TOKEN }}
+          errors: true
+          payload: |
+            channel: ${{ secrets.SLACK_CHANNEL_ID }}
+            text: "Work picked up: #${{ github.event.issue.number }}"
+            blocks:
+              - type: header
+                text:
+                  type: plain_text
+                  text: "Work picked up: #${{ github.event.issue.number }}"
+              - type: section
+                text:
+                  type: mrkdwn
+                  text: |
+                    *Issue:* #${{ github.event.issue.number }} - ${{ github.event.issue.title }}
+
+                    *Assignee:*
+                    ${{ github.event.assignee.login }}
+
+                    *Status:*
+                    ${{ steps.move.outcome == 'success' && 'Ready → In progress' || ':warning: Could not move the card, please move it to In progress manually' }}
+              - type: actions
+                elements:
+                  - type: button
+                    text:
+                      type: plain_text
+                      text: View Issue
+                    url: ${{ github.event.issue.html_url }}
+                  - type: button
+                    text:
+                      type: plain_text
+                      text: View Run Log
+                    url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
