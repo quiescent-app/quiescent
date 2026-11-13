@@ -1,4 +1,4 @@
-# Quiescent
+﻿# Quiescent
 
 ## Local setup
 
@@ -101,18 +101,15 @@ invalid credentials or refresh tokens return `401`, duplicate email returns
 `409`, an oversized body returns `413`, unsupported request encoding returns
 `415`, unknown routes return `404`, and unexpected server errors return a
 generic `500` response.
-## Extension sign-in and web sign-up
+## Web sign-in and extension connection
 
-Set `VITE_API_BASE_URL` in `apps/extension/.env` and `apps/web/ui/.env` to the
-API origin. Set `VITE_WEB_BASE_URL` in the extension to the web origin, and
-`WEB_ORIGIN` in `apps/web/api/.env` to that same web origin. The extension build
-adds its configured API host permission to the generated manifest.
+Set `VITE_API_BASE_URL` in the web and extension `.env` files to the API
+origin. Set the extension's `VITE_WEB_BASE_URL` and the API's `WEB_ORIGIN` to
+the web app origin. Build and load the extension before using its sign-in
+button, which opens `/login` with the extension ID.
 
-New users create an account at `/signup` in the web app, then sign in through
-the extension popup. The extension stores its access and refresh tokens in
-Chrome storage restricted to trusted extension contexts. It refreshes an
-expiring access token and rotates the refresh token when the popup opens.
-Signing out clears the local session and calls `/auth/logout`.
-
-Article saving from the extension is disabled until authenticated article
-requests are connected in the next milestone.
+After signing in or creating an account, the web app obtains a separate
+extension session from `/auth/extension-session` and sends it to the extension.
+The extension accepts messages only from the configured web origin and stores
+its tokens in trusted Chrome storage. It refreshes its own session and sends
+an access token with `POST /articles` when saving the active page.
