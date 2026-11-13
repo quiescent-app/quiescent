@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 
-import { formatDate } from "@/lib/format";
+import { formatDate } from "@/utils/format";
 import type { LibraryItem } from "@/types/library";
 
 interface LibraryCardProps {
