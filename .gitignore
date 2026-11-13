@@ -34,3 +34,9 @@ drizzle/
 
 # Generated test database schema
 apps/web/api/test/database/schema.sql
+
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfstate.lock.info
+*.tfvars
