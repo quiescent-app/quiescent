@@ -2,6 +2,7 @@ import { Router, type RequestHandler } from "express";
 
 import { authController } from "../controller/auth.controller.js";
 import { AppError, HttpStatus } from "../errors/appError.js";
+import { requireAuth } from "../middleware/auth.middleware.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -59,5 +60,6 @@ router.post("/sign-up", requireCredentials, authController.signUp);
 router.post("/login", requireCredentials, authController.login);
 router.post("/refresh", requireRefreshToken, authController.refresh);
 router.post("/logout", requireLogoutRefreshToken, authController.logout);
+router.post("/extension-session", requireAuth(), authController.extensionSession);
 
 export default router;
