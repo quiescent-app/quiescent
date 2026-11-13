@@ -39,7 +39,7 @@ describe("UserModel", () => {
     databaseState.current = undefined;
   });
 
-  it("creates and returns a user with database-generated fields", async () => {
+  it("should create and return a user with database-generated fields", async () => {
     const beforeCreate = new Date();
 
     const user = await model.create({
@@ -51,12 +51,13 @@ describe("UserModel", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
     ); // UUID
     expect(user.email).toBe("reader@example.com");
+    expect(user.displayName).toBeNull();
     expect(user.password).toBe("$hash$already-created-by-service");
     expect(user.createdAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
     expect(user.updatedAt.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
   });
 
-  it("finds users by email and id", async () => {
+  it("should find users by email and id", async () => {
     const created = await model.create({
       email: "reader@example.com",
       password: "stored-hash",
@@ -66,14 +67,28 @@ describe("UserModel", () => {
     await expect(model.findById(created.id)).resolves.toEqual(created);
   });
 
-  it("returns null when a user does not exist", async () => {
+  it("should return null when a user does not exist", async () => {
     await expect(model.findByEmail("missing@example.com")).resolves.toBeNull();
     await expect(
       model.findById("00000000-0000-4000-8000-000000000000"),
     ).resolves.toBeNull();
   });
 
-  it("propagates the database unique-constraint error", async () => {
+  it("should update a display name for a known user and return null for an unknown user", async () => {
+    const created = await model.create({
+      email: "reader@example.com",
+      password: "stored-hash",
+    });
+
+    const updated = await model.updateDisplayName(created.id, "Reader One");
+    expect(updated?.displayName).toBe("Reader One");
+    expect(updated?.updatedAt.getTime()).toBeGreaterThanOrEqual(created.updatedAt.getTime());
+    await expect(
+      model.updateDisplayName("00000000-0000-0000-0000-000000000000", "Reader One"),
+    ).resolves.toBeNull();
+  });
+
+  it("should propagate the database unique-constraint error", async () => {
     await model.create({
       email: "reader@example.com",
       password: "first-hash",
@@ -90,7 +105,7 @@ describe("UserModel", () => {
   });
 
   it.each(["email", "password"])(
-    "enforces the non-null constraint for %s",
+    "should enforce the non-null constraint for %s",
     async (column) => {
       const email = column === "email" ? null : "reader@example.com";
       const password = column === "password" ? null : "stored-hash";
