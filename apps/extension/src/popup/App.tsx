@@ -1,7 +1,6 @@
-﻿import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { ReadingProgressResponse, ReadingProgressUpdate } from "../types/readingProgress";
-import { requestAuth, type AuthStatus } from "../types/auth";
 import { previewFromTab, type ArticlePreview } from "./article";
 import "./styles.css";
 
@@ -13,7 +12,6 @@ type ProgressState =
 
 type PageState = "loading" | "ready" | "unsupported" | "unavailable";
 type SessionState = "loading" | "signed-out" | "signed-in";
-type AuthView = "login" | "signup";
 
 const progressUnavailableMessage =
   "Reading progress isn't available on this page. Try a regular website instead.";
@@ -21,10 +19,7 @@ const webOrigin = import.meta.env.VITE_WEB_BASE_URL || "http://localhost:5173";
 
 function App() {
   const [sessionState, setSessionState] = useState<SessionState>("loading");
-  const [session, setSession] = useState<AuthStatus>({ authenticated: false });
-  const [authView, setAuthView] = useState<AuthView>("login");
-  const [authError, setAuthError] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
+  const [saveState, setSaveState] = useState<"ready" | "saving" | "saved" | "already-saved" | "error">("ready");
   const [pageState, setPageState] = useState<PageState>("loading");
   const [article, setArticle] = useState<ArticlePreview | null>(null);
   const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
@@ -63,22 +58,9 @@ function App() {
 
   useEffect(() => {
     let active = true;
-    void requestAuth({ type: "AUTH_STATUS" }).then((reply) => {
-      if (!active) return;
-      if (reply.ok) {
-        setSession(reply.status);
-        setSessionState(reply.status.authenticated ? "signed-in" : "signed-out");
-      } else {
-        setAuthError(reply.message);
-        setSessionState("signed-out");
-      }
-    }).catch(() => {
-      if (active) {
-        setAuthError("Could not connect to the extension session. Reopen Quiescent.");
-        setSessionState("signed-out");
-      }
-    });
-    void Promise.resolve().then(updatePage);
+    void chrome.runtime.sendMessage({ type: "AUTH_STATUS" }).then((reply: { ok: boolean; result?: { authenticated: boolean } }) => {
+      if (active) setSessionState(reply.ok && reply.result?.authenticated ? "signed-in" : "signed-out");
+    }).catch(() => { if (active) setSessionState("signed-out"); });    void Promise.resolve().then(updatePage);
     const onTabChange = () => {
       trackedTabId.current = null;
       trackedPageUrl.current = null;
@@ -103,66 +85,15 @@ function App() {
     };
   }, [updatePage, startReadingProgress]);
 
-  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (authBusy) return;
-    const values = new FormData(event.currentTarget);
-    const email = String(values.get("email") ?? "").trim();
-    const password = String(values.get("password") ?? "");
-    setAuthBusy(true);
-    setAuthError("");
+  const handleSave = async () => {
+    if (!article || sessionState !== "signed-in" || saveState === "saving") return;
+    setSaveState("saving");
     try {
-      const reply = await requestAuth({ type: "AUTH_LOGIN", email, password });
-      if (!reply.ok) throw new Error(reply.message);
-      setSession(reply.status);
-      setSessionState("signed-in");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Could not sign in.");
-    } finally {
-      setAuthBusy(false);
-    }
+      const reply = await chrome.runtime.sendMessage({ type: "SAVE_ARTICLE", article: { title: article.title, url: article.url } }) as { ok: boolean; result?: "saved" | "already-saved" };
+      if (!reply.ok || !reply.result) throw new Error("Save failed");
+      setSaveState(reply.result);
+    } catch { setSaveState("error"); }
   };
-
-  const handleSignup = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (authBusy) return;
-    const values = new FormData(event.currentTarget);
-    const email = String(values.get("signup-email") ?? "").trim();
-    const password = String(values.get("signup-password") ?? "");
-    const confirmation = String(values.get("signup-confirmation") ?? "");
-    if (password !== confirmation) { setAuthError("Passwords do not match."); return; }
-    setAuthBusy(true);
-    setAuthError("");
-    try {
-      const response = await fetch(new URL("/auth/sign-up", import.meta.env.VITE_API_BASE_URL || "http://localhost:3000"), {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!response.ok) {
-        const body = await response.json().catch(() => null) as { error?: { message?: string } } | null;
-        throw new Error(body?.error?.message || `Could not create account (${response.status}).`);
-      }
-      setAuthView("login");
-      setAuthError("Account created. Sign in to continue.");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Could not create account.");
-    } finally { setAuthBusy(false); }
-  };
-  const handleLogout = async () => {
-    setAuthBusy(true);
-    setAuthError("");
-    try {
-      const reply = await requestAuth({ type: "AUTH_LOGOUT" });
-      if (!reply.ok) throw new Error(reply.message);
-      setSession({ authenticated: false });
-      setSessionState("signed-out");
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Could not sign out.");
-    } finally {
-      setAuthBusy(false);
-    }
-  };
-
   useEffect(() => {
     const listener = (message: ReadingProgressUpdate, sender: chrome.runtime.MessageSender) => {
       if (message.type === "READING_PROGRESS_UPDATE" && sender.tab?.id === trackedTabId.current && message.url === trackedPageUrl.current && Number.isFinite(message.progress)) {
@@ -186,36 +117,9 @@ function App() {
         </div>
       </header>
 
-      {sessionState === "loading" && <p role="status">Restoring session…</p>}
-      {sessionState === "signed-out" && (
-        <section aria-label={authView === "login" ? "Sign in" : "Create account"} className="auth-section">
-          <h2>{authView === "login" ? "Sign in to Quiescent" : "Create your account"}</h2>
-          {authView === "login" ? (
-            <form onSubmit={(event) => void handleLogin(event)}>
-              <label htmlFor="email">Email</label><input autoComplete="email" id="email" name="email" required type="email" />
-              <label htmlFor="password">Password</label><input autoComplete="current-password" id="password" name="password" required type="password" />
-              <button disabled={authBusy} type="submit">{authBusy ? "Signing in…" : "Sign in"}</button>
-            </form>
-          ) : (
-            <form onSubmit={(event) => void handleSignup(event)}>
-              <label htmlFor="signup-email">Email</label><input autoComplete="email" id="signup-email" name="signup-email" required type="email" />
-              <label htmlFor="signup-password">Password</label><input autoComplete="new-password" id="signup-password" minLength={8} name="signup-password" required type="password" />
-              <label htmlFor="signup-confirmation">Confirm password</label><input autoComplete="new-password" id="signup-confirmation" minLength={8} name="signup-confirmation" required type="password" />
-              <button disabled={authBusy} type="submit">{authBusy ? "Creating account…" : "Create account"}</button>
-            </form>
-          )}
-          <button className="auth-link" onClick={() => { setAuthView(authView === "login" ? "signup" : "login"); setAuthError(""); }} type="button">
-            {authView === "login" ? "Create an account" : "Back to sign in"}
-          </button>
-        </section>
-      )}      {sessionState === "signed-in" && (
-        <section aria-label="Account" className="auth-account">
-          <span>Signed in as {session.email}</span>
-          <button disabled={authBusy} onClick={() => void handleLogout()} type="button">Sign out</button>
-        </section>
-      )}
-      {authError && <p className="status-error" role="alert">{authError}</p>}
-
+      {sessionState === "loading" && <p role="status">Checking sign in...</p>}
+      {sessionState === "signed-out" && <button className="save-button" onClick={() => window.open(`${webOrigin}/login?extensionId=${chrome.runtime.id}`, "_blank")} type="button">Sign in through the app</button>}
+      {sessionState === "signed-in" && <p role="status">Connected to your account</p>}
       <section aria-label="Save article" className="save-preview">
         {pageState === "loading" && <p role="status">Checking page…</p>}
         {pageState === "unsupported" && <p role="status">Open a regular website to save it to Quiescent.</p>}
@@ -228,8 +132,8 @@ function App() {
               <h2>{article.title}</h2>
               <p className="article-url" title={article.url}>{article.url}</p>
             </article>
-            <button className="save-button" disabled type="button">Add to Quiescent</button>
-            <p className="save-hint">Article saving is coming soon.</p>
+            <button className="save-button" disabled={sessionState !== "signed-in" || saveState === "saving" || saveState === "saved" || saveState === "already-saved"} onClick={() => void handleSave()} type="button">{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "already-saved" ? "Already saved" : "Add to Quiescent"}</button>
+            {saveState === "error" && <p className="save-hint status-error" role="alert">Could not save. Try again.</p>}
           </>
         )}
       </section>
@@ -255,4 +159,3 @@ function App() {
 }
 
 export default App;
-

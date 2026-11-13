@@ -1,28 +1,26 @@
-﻿import { getAuthStatus, login, logout } from "./auth";
-import type { AuthMessage, AuthReply } from "../types/auth";
+import { acceptSession, getAuthStatus, saveArticle } from "./auth";
 
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("Quiescent installed");
+chrome.runtime.onInstalled.addListener(() => console.log("Quiescent installed"));
+
+chrome.runtime.onMessageExternal.addListener((message: { type?: string; tokens?: unknown }, sender, sendResponse) => {
+  const allowed = import.meta.env.VITE_WEB_BASE_URL || "http://localhost:5173";
+  if (sender.url && new URL(sender.url).origin === new URL(allowed).origin && message?.type === "EXTENSION_SESSION") {
+    void acceptSession(message.tokens).then(
+      () => sendResponse({ ok: true }),
+      () => sendResponse({ ok: false }),
+    );
+    return true;
+  }
 });
 
-chrome.runtime.onMessage.addListener((message: AuthMessage, sender, sendResponse: (reply: AuthReply) => void) => {
-  if (!message?.type?.startsWith("AUTH_") || sender.url !== chrome.runtime.getURL("popup.html")) return;
-
-  const action = message.type === "AUTH_STATUS"
-    ? getAuthStatus()
-    : message.type === "AUTH_LOGIN"
-      ? login(message.email, message.password)
-      : message.type === "AUTH_LOGOUT"
-        ? logout()
-        : null;
-  if (!action) return;
-
-  void action.then(
-    (status) => sendResponse({ ok: true, status }),
-    (error: unknown) => sendResponse({
-      ok: false,
-      message: error instanceof Error ? error.message : "Authentication failed.",
-    }),
+chrome.runtime.onMessage.addListener((message: { type?: string; article?: { title: string; url: string } }, sender, sendResponse) => {
+  if (sender.url !== chrome.runtime.getURL("popup.html")) return;
+  const operation = message?.type === "AUTH_STATUS" ? getAuthStatus()
+    : message?.type === "SAVE_ARTICLE" && message.article ? saveArticle(message.article) : null;
+  if (!operation) return;
+  void operation.then(
+    (result) => sendResponse({ ok: true, result }),
+    (cause: unknown) => sendResponse({ ok: false, message: cause instanceof Error ? cause.message : "Request failed." }),
   );
   return true;
 });
