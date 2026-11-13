@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { RequestHandler } from "express";
 
@@ -34,6 +34,7 @@ const { authControllerMock } = vi.hoisted(() => {
       login: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
       refresh: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
       logout: vi.fn<RequestHandler>((_req, res) => { res.status(204).end(); }),
+      extensionSession: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
     },
   };
 });
@@ -172,3 +173,4 @@ describe("authentication routes", () => {
     expect(response.body).toEqual({ error: { message: "Route not found" } });
   });
 });
+

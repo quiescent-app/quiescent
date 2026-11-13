@@ -9,7 +9,7 @@ type Session = {
 const SESSION_KEY = "authSession";
 const REFRESH_BUFFER_SECONDS = 60;
 let refreshPromise: Promise<Session> | null = null;
-let generation = 0;
+const generation = 0;
 let storageReady: Promise<void> | null = null;
 
 function apiOrigin(): string {
@@ -102,34 +102,36 @@ export async function getAuthStatus(): Promise<AuthStatus> {
   return { authenticated: true, email: session.email };
 }
 
-export async function login(email: string, password: string): Promise<AuthStatus> {
-  const response = await fetch(new URL("/auth/login", apiOrigin()), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email: email.trim(), password }),
-  });
-  if (!response.ok) throw new Error(await errorMessage(response));
-  const session = parseTokens(await response.json(), email.trim());
-  generation++;
-  await writeSession(session);
-  return { authenticated: true, email: session.email };
-}
-
-export async function logout(): Promise<AuthStatus> {
-  generation++;
-  const session = await readSession();
-  await writeSession(null);
-  if (session) {
-    try {
-      await fetch(new URL("/auth/logout", apiOrigin()), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken: session.refreshToken }),
-      });
-    } catch {
-      // Local sign-out must still succeed when the API is unavailable.
-    }
+export async function acceptSession(input: unknown): Promise<AuthStatus> {
+  const value = input as { accessToken?: unknown; refreshToken?: unknown; user?: { email?: unknown } };
+  if (typeof value?.accessToken !== "string" || typeof value.refreshToken !== "string" || typeof value.user?.email !== "string") {
+    throw new Error("Invalid session handoff.");
   }
-  return { authenticated: false };
+  await writeSession({ accessToken: value.accessToken, refreshToken: value.refreshToken, email: value.user.email });
+  return { authenticated: true, email: value.user.email };
 }
 
+export async function saveArticle(article: { title: string; url: string }): Promise<"saved" | "already-saved"> {
+  let session = await readSession();
+  if (!session) throw new Error("Sign in to save articles.");
+  if (expiresSoon(session.accessToken)) session = await refresh(session);
+  const response = await fetch(new URL("/articles", apiOrigin()), {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+    body: JSON.stringify(article),
+  });
+  if (response.status === 409) return "already-saved";
+  if (response.status === 401) {
+    session = await refresh(session);
+    const retry = await fetch(new URL("/articles", apiOrigin()), {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify(article),
+    });
+    if (retry.status === 409) return "already-saved";
+    if (!retry.ok) throw new Error(await errorMessage(retry));
+    return "saved";
+  }
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return "saved";
+}

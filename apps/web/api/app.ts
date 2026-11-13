@@ -9,6 +9,17 @@ export function createApp(): Express {
   const app = express();
 
   app.use(express.json({ limit: "16kb" }));
+  app.use((req, res, next) => {
+    const origin = process.env["WEB_ORIGIN"] ?? "http://localhost:5173";
+    if (req.header("Origin") === origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Vary", "Origin");
+      res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type");
+      res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    }
+    if (req.method === "OPTIONS") { res.status(204).end(); return; }
+    next();
+  });
   app.use("/auth", authRouter);
   app.use("/articles", articleRouter);
   app.use((_req, _res, next) => {

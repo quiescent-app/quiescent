@@ -122,6 +122,12 @@ export class AuthService {
     if (token) await refreshTokenModel.revokeFamily(token.familyId);
   }
 
+  async createExtensionSession(userId: string): Promise<AuthResult> {
+    const user = await userModel.findById(userId);
+    if (!user) throw new AppError(HttpStatus.UNAUTHORIZED, "Authentication required");
+    return this.createAuthResult(user, randomUUID());
+  }
+
   private async createAuthResult(
     user: User,
     familyId: string,
