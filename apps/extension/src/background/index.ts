@@ -1,4 +1,4 @@
-import { acceptSession, getAuthStatus, saveArticle } from "./auth";
+import { acceptSession, checkArticle, getAuthStatus, saveArticle, SessionExpiredError } from "./auth";
 
 chrome.runtime.onInstalled.addListener(() => console.log("Quiescent installed"));
 
@@ -13,14 +13,15 @@ chrome.runtime.onMessageExternal.addListener((message: { type?: string; tokens?:
   }
 });
 
-chrome.runtime.onMessage.addListener((message: { type?: string; article?: { title: string; url: string } }, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message: { type?: string; article?: { title: string; url: string }; url?: string }, sender, sendResponse) => {
   if (sender.url !== chrome.runtime.getURL("popup.html")) return;
   const operation = message?.type === "AUTH_STATUS" ? getAuthStatus()
-    : message?.type === "SAVE_ARTICLE" && message.article ? saveArticle(message.article) : null;
+    : message?.type === "SAVE_ARTICLE" && message.article ? saveArticle(message.article)
+    : message?.type === "CHECK_ARTICLE" && typeof message.url === "string" ? checkArticle(message.url) : null;
   if (!operation) return;
   void operation.then(
     (result) => sendResponse({ ok: true, result }),
-    (cause: unknown) => sendResponse({ ok: false, message: cause instanceof Error ? cause.message : "Request failed." }),
+    (cause: unknown) => sendResponse({ ok: false, message: cause instanceof Error ? cause.message : "Request failed.", authRequired: cause instanceof SessionExpiredError }),
   );
   return true;
 });
