@@ -12,6 +12,8 @@ let refreshPromise: Promise<Session> | null = null;
 const generation = 0;
 let storageReady: Promise<void> | null = null;
 
+export class SessionExpiredError extends Error {}
+
 function apiOrigin(): string {
   const configured = import.meta.env.VITE_API_BASE_URL?.trim();
   if (!configured) throw new Error("API URL is not configured.");
@@ -75,7 +77,7 @@ async function refresh(session: Session): Promise<Session> {
     });
     if (response.status === 401) {
       if (version === generation) await writeSession(null);
-      throw new Error("Your session expired. Sign in again.");
+      throw new SessionExpiredError("Your session expired. Sign in again.");
     }
     if (!response.ok) throw new Error(await errorMessage(response));
     const updated = parseTokens(await response.json(), session.email);
@@ -111,27 +113,37 @@ export async function acceptSession(input: unknown): Promise<AuthStatus> {
   return { authenticated: true, email: value.user.email };
 }
 
-export async function saveArticle(article: { title: string; url: string }): Promise<"saved" | "already-saved"> {
+async function articleRequest(method: "GET" | "POST", url: string, article?: { title: string; url: string }): Promise<Response> {
   let session = await readSession();
-  if (!session) throw new Error("Sign in to save articles.");
+  if (!session) throw new SessionExpiredError("Sign in to save articles.");
   if (expiresSoon(session.accessToken)) session = await refresh(session);
-  const response = await fetch(new URL("/articles", apiOrigin()), {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
-    body: JSON.stringify(article),
+  const endpoint = new URL(method === "GET" ? "/articles/by-url" : "/articles", apiOrigin());
+  if (method === "GET") endpoint.searchParams.set("url", url);
+  const send = (accessToken: string) => fetch(endpoint, {
+    method,
+    headers: { Authorization: `Bearer ${accessToken}`, ...(article ? { "Content-Type": "application/json" } : {}) },
+    ...(article ? { body: JSON.stringify(article) } : {}),
   });
-  if (response.status === 409) return "already-saved";
+  const response = await send(session.accessToken);
   if (response.status === 401) {
     session = await refresh(session);
-    const retry = await fetch(new URL("/articles", apiOrigin()), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
-      body: JSON.stringify(article),
-    });
-    if (retry.status === 409) return "already-saved";
-    if (!retry.ok) throw new Error(await errorMessage(retry));
-    return "saved";
+    const retry = await send(session.accessToken);
+    if (retry.status === 401) throw new SessionExpiredError("Your session expired. Sign in again.");
+    return retry;
   }
+  return response;
+}
+
+export async function checkArticle(url: string): Promise<"saved" | "not-saved"> {
+  const response = await articleRequest("GET", url);
+  if (response.status === 404) return "not-saved";
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return "saved";
+}
+
+export async function saveArticle(article: { title: string; url: string }): Promise<"saved" | "already-saved"> {
+  const response = await articleRequest("POST", article.url, article);
+  if (response.status === 409) return "already-saved";
   if (!response.ok) throw new Error(await errorMessage(response));
   return "saved";
 }
