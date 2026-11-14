@@ -29,6 +29,10 @@ export class AuthController {
     await authService.logout(refreshToken);
     res.status(HttpStatus.NO_CONTENT).end();
   };
+
+  readonly extensionSession: RequestHandler = async (_req, res) => {
+    res.status(HttpStatus.OK).json(await authService.createExtensionSession(res.locals.userId));
+  };
 }
 
 export const authController = new AuthController();

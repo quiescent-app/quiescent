@@ -1,4 +1,4 @@
-# Quiescent
+﻿# Quiescent
 
 ## Local setup
 
@@ -101,3 +101,15 @@ invalid credentials or refresh tokens return `401`, duplicate email returns
 `409`, an oversized body returns `413`, unsupported request encoding returns
 `415`, unknown routes return `404`, and unexpected server errors return a
 generic `500` response.
+## Web sign-in and extension connection
+
+Set `VITE_API_BASE_URL` in the web and extension `.env` files to the API
+origin. Set the extension's `VITE_WEB_BASE_URL` and the API's `WEB_ORIGIN` to
+the web app origin. Build and load the extension before using its sign-in
+button, which opens `/login` with the extension ID.
+
+After signing in or creating an account, the web app obtains a separate
+extension session from `/auth/extension-session` and sends it to the extension.
+The extension accepts messages only from the configured web origin and stores
+its tokens in trusted Chrome storage. It refreshes its own session and sends
+an access token with `POST /articles` when saving the active page.
