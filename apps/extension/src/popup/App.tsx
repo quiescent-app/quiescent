@@ -23,22 +23,31 @@ function App() {
   const [pageState, setPageState] = useState<PageState>("loading");
   const [article, setArticle] = useState<ArticlePreview | null>(null);
   const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
+  const activeArticleUrl = useRef<string | null>(null);
+  const savingArticleUrl = useRef<string | null>(null);
+  const completedSaves = useRef(new Map<string, "saved" | "already-saved">());
+  const pageRequestId = useRef(0);
   const trackedTabId = useRef<number | null>(null);
   const trackedPageUrl = useRef<string | null>(null);
 
   const updatePage = useCallback(async () => {
+    const requestId = ++pageRequestId.current;
     setPageState("loading");
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (requestId !== pageRequestId.current) return;
       const preview = previewFromTab(tab);
+      activeArticleUrl.current = preview?.url ?? null;
       setArticle(preview);
+      setSaveState(savingArticleUrl.current ? "saving" : preview ? completedSaves.current.get(preview.url) ?? "ready" : "ready");
       setPageState(preview ? "ready" : "unsupported");
     } catch {
+      if (requestId !== pageRequestId.current) return;
+      activeArticleUrl.current = null;
       setArticle(null);
       setPageState("unavailable");
     }
   }, []);
-
   const startReadingProgress = useCallback(async () => {
     setProgressState({ status: "loading" });
     try {
@@ -67,6 +76,7 @@ function App() {
       setProgressState({ status: "idle" });
       void updatePage();
     };
+
     const onTabUpdated = (tabId: number, changeInfo: { url?: string; title?: string; status?: string }) => {
       if (changeInfo.url || changeInfo.title || changeInfo.status === "complete") void updatePage();
       if (tabId !== trackedTabId.current) return;
@@ -76,6 +86,7 @@ function App() {
       }
       if (changeInfo.status === "complete") void startReadingProgress();
     };
+
     chrome.tabs.onActivated.addListener(onTabChange);
     chrome.tabs.onUpdated.addListener(onTabUpdated);
     return () => {
@@ -86,13 +97,21 @@ function App() {
   }, [updatePage, startReadingProgress]);
 
   const handleSave = async () => {
-    if (!article || sessionState !== "signed-in" || saveState === "saving") return;
+    if (!article || sessionState !== "signed-in" || savingArticleUrl.current || saveState === "saved" || saveState === "already-saved") return;
+    const targetUrl = article.url;
+    savingArticleUrl.current = targetUrl;
     setSaveState("saving");
     try {
-      const reply = await chrome.runtime.sendMessage({ type: "SAVE_ARTICLE", article: { title: article.title, url: article.url } }) as { ok: boolean; result?: "saved" | "already-saved" };
+      const reply = await chrome.runtime.sendMessage({ type: "SAVE_ARTICLE", article: { title: article.title, url: targetUrl } }) as { ok: boolean; result?: "saved" | "already-saved" };
       if (!reply.ok || !reply.result) throw new Error("Save failed");
-      setSaveState(reply.result);
-    } catch { setSaveState("error"); }
+      completedSaves.current.set(targetUrl, reply.result);
+      savingArticleUrl.current = null;
+      if (activeArticleUrl.current === targetUrl) setSaveState(reply.result);
+      else setSaveState(activeArticleUrl.current ? completedSaves.current.get(activeArticleUrl.current) ?? "ready" : "ready");
+    } catch {
+      savingArticleUrl.current = null;
+      setSaveState(activeArticleUrl.current === targetUrl ? "error" : activeArticleUrl.current ? completedSaves.current.get(activeArticleUrl.current) ?? "ready" : "ready");
+    }
   };
   useEffect(() => {
     const listener = (message: ReadingProgressUpdate, sender: chrome.runtime.MessageSender) => {
@@ -132,7 +151,11 @@ function App() {
               <h2>{article.title}</h2>
               <p className="article-url" title={article.url}>{article.url}</p>
             </article>
-            <button className="save-button" disabled={sessionState !== "signed-in" || saveState === "saving" || saveState === "saved" || saveState === "already-saved"} onClick={() => void handleSave()} type="button">{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "already-saved" ? "Already saved" : "Add to Quiescent"}</button>
+            <button className="save-button"
+                    disabled={sessionState !== "signed-in" || saveState === "saving" || saveState === "saved" || saveState === "already-saved"}
+                    onClick={() => void handleSave()}
+                    type="button">{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "already-saved" ? "Already saved" : "Add to Quiescent"}
+            </button>
             {saveState === "error" && <p className="save-hint status-error" role="alert">Could not save. Try again.</p>}
           </>
         )}
