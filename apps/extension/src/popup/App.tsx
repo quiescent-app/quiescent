@@ -12,6 +12,8 @@ type ProgressState =
 
 type PageState = "loading" | "ready" | "unsupported" | "unavailable";
 type SessionState = "loading" | "signed-out" | "signed-in";
+type SaveState = "ready" | "saving" | "saved" | "already-saved" | "error";
+type ArticleReply = { ok: boolean; result?: "saved" | "not-saved" | "already-saved"; authRequired?: boolean };
 
 const progressUnavailableMessage =
   "Reading progress isn't available on this page. Try a regular website instead.";
@@ -19,21 +21,43 @@ const webOrigin = import.meta.env.VITE_WEB_BASE_URL || "http://localhost:5173";
 
 function App() {
   const [sessionState, setSessionState] = useState<SessionState>("loading");
-  const [saveState, setSaveState] = useState<"ready" | "saving" | "saved" | "already-saved" | "error">("ready");
+  const [saveState, setSaveState] = useState<SaveState>("ready");
+  const [checkFailed, setCheckFailed] = useState(false);
   const [pageState, setPageState] = useState<PageState>("loading");
   const [article, setArticle] = useState<ArticlePreview | null>(null);
+  const [pageKey, setPageKey] = useState<string | null>(null);
+  const [checkedPageKey, setCheckedPageKey] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
   const trackedTabId = useRef<number | null>(null);
   const trackedPageUrl = useRef<string | null>(null);
+  const currentPageKey = useRef<string | null>(null);
+  const requestVersion = useRef(0);
+  const pageQueryVersion = useRef(0);
 
   const updatePage = useCallback(async () => {
+    const queryVersion = ++pageQueryVersion.current;
     setPageState("loading");
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (queryVersion !== pageQueryVersion.current) return;
       const preview = previewFromTab(tab);
+      const nextPageKey = preview ? `${tab?.id ?? "unknown"}:${preview.url}` : null;
+      if (nextPageKey !== currentPageKey.current) {
+        currentPageKey.current = nextPageKey;
+        setPageKey(nextPageKey);
+        setCheckedPageKey(null);
+        requestVersion.current += 1;
+        setSaveState("ready");
+        setCheckFailed(false);
+      }
       setArticle(preview);
       setPageState(preview ? "ready" : "unsupported");
     } catch {
+      if (queryVersion !== pageQueryVersion.current) return;
+      currentPageKey.current = null;
+      setPageKey(null);
+      setCheckedPageKey(null);
+      requestVersion.current += 1;
       setArticle(null);
       setPageState("unavailable");
     }
@@ -85,14 +109,57 @@ function App() {
     };
   }, [updatePage, startReadingProgress]);
 
+  const articleUrl = article?.url;
+  const isChecking = sessionState === "signed-in" && !!articleUrl && checkedPageKey !== pageKey;
+
+  useEffect(() => {
+    if (!articleUrl || sessionState !== "signed-in") return;
+    const checkedPageKey = pageKey;
+    const version = ++requestVersion.current;
+    let active = true;
+    void chrome.runtime.sendMessage({ type: "CHECK_ARTICLE", url: articleUrl }).then((reply: ArticleReply) => {
+      if (!active || checkedPageKey !== currentPageKey.current || version !== requestVersion.current) return;
+      setCheckedPageKey(checkedPageKey);
+      if (reply.authRequired) {
+        setSessionState("signed-out");
+        setSaveState("ready");
+      } else if (reply.ok && reply.result === "saved") {
+        setSaveState("already-saved");
+      } else if (reply.ok && reply.result === "not-saved") {
+        setSaveState("ready");
+      } else {
+        setSaveState("ready");
+        setCheckFailed(true);
+      }
+    }).catch(() => {
+      if (!active || checkedPageKey !== currentPageKey.current || version !== requestVersion.current) return;
+      setCheckedPageKey(checkedPageKey);
+      setSaveState("ready");
+      setCheckFailed(true);
+    });
+    return () => { active = false; };
+  }, [articleUrl, pageKey, sessionState]);
+
   const handleSave = async () => {
-    if (!article || sessionState !== "signed-in" || saveState === "saving") return;
+    if (!article || pageState !== "ready" || sessionState !== "signed-in" || isChecking || (saveState !== "ready" && saveState !== "error")) return;
+    const pageKey = currentPageKey.current;
+    const version = ++requestVersion.current;
     setSaveState("saving");
+    setCheckFailed(false);
     try {
-      const reply = await chrome.runtime.sendMessage({ type: "SAVE_ARTICLE", article: { title: article.title, url: article.url } }) as { ok: boolean; result?: "saved" | "already-saved" };
+      const reply = await chrome.runtime.sendMessage({ type: "SAVE_ARTICLE", article: { title: article.title, url: article.url } }) as ArticleReply;
+      if (pageKey !== currentPageKey.current || version !== requestVersion.current) return;
+      if (reply.authRequired) {
+        setSessionState("signed-out");
+        setSaveState("ready");
+        return;
+      }
       if (!reply.ok || !reply.result) throw new Error("Save failed");
+      if (reply.result !== "saved" && reply.result !== "already-saved") throw new Error("Save failed");
       setSaveState(reply.result);
-    } catch { setSaveState("error"); }
+    } catch {
+      if (pageKey === currentPageKey.current && version === requestVersion.current) setSaveState("error");
+    }
   };
   useEffect(() => {
     const listener = (message: ReadingProgressUpdate, sender: chrome.runtime.MessageSender) => {
@@ -132,7 +199,8 @@ function App() {
               <h2>{article.title}</h2>
               <p className="article-url" title={article.url}>{article.url}</p>
             </article>
-            <button className="save-button" disabled={sessionState !== "signed-in" || saveState === "saving" || saveState === "saved" || saveState === "already-saved"} onClick={() => void handleSave()} type="button">{saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "already-saved" ? "Already saved" : "Add to Quiescent"}</button>
+            <button className="save-button" disabled={sessionState !== "signed-in" || isChecking || saveState === "saving" || saveState === "saved" || saveState === "already-saved"} onClick={() => void handleSave()} type="button">{isChecking ? "Checking..." : saveState === "saving" ? "Saving..." : saveState === "saved" ? "Saved" : saveState === "already-saved" ? "Already saved" : "Add to Quiescent"}</button>
+            {checkFailed && <p className="save-hint status-error" role="status">Could not check saved status. You can still try saving.</p>}
             {saveState === "error" && <p className="save-hint status-error" role="alert">Could not save. Try again.</p>}
           </>
         )}
