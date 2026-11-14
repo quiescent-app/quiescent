@@ -4,6 +4,7 @@ import { AppError, HttpStatus } from "./errors/appError.js";
 import { errorMiddleware } from "./middleware/error.middleware.js";
 import authRouter from "./routes/auth.routes.js";
 import { articleRouter } from "./routes/article.routes.js";
+import { userRouter } from "./routes/user.routes.js";
 
 export function createApp(): Express {
   const app = express();
@@ -22,6 +23,7 @@ export function createApp(): Express {
   });
   app.use("/auth", authRouter);
   app.use("/articles", articleRouter);
+  app.use("/users", userRouter);
   app.use((_req, _res, next) => {
     next(new AppError(HttpStatus.NOT_FOUND, "Route not found"));
   });
