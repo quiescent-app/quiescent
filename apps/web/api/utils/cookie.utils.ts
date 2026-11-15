@@ -32,10 +32,6 @@ export function getRefreshCookieOptions(environment: NodeJS.ProcessEnv = process
 }
 
 export function getClearRefreshCookieOptions(environment: NodeJS.ProcessEnv = process.env) {
-  return {
-    httpOnly: true,
-    secure: environment["NODE_ENV"] === "production",
-    sameSite: "lax" as const,
-    path: "/auth",
-  };
+  const { maxAge: _maxAge, ...options } = getRefreshCookieOptions(environment);
+  return options;
 }
