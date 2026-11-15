@@ -27,11 +27,12 @@ function response(body: unknown, status = 200): Response {
 afterEach(() => {
   clearAccessToken();
   vi.unstubAllGlobals();
+  localStorage.clear();
   sessionStorage.clear();
 });
 
 describe("web auth API client", () => {
-  it("sends credentials and retains only the access token in memory", async () => {
+  it("sends login credentials, stores the access token, and uses it for API requests", async () => {
     const fetchMock = vi.fn().mockResolvedValue(response(firstSession));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -45,12 +46,32 @@ describe("web auth API client", () => {
         body: JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
       }),
     );
+    expect(localStorage.getItem("quiescent_access_token")).toBe("access-one");
+    expect(localStorage.getItem("quiescent_refresh_token")).toBeNull();
     expect(sessionStorage.length).toBe(0);
 
     fetchMock.mockResolvedValueOnce(response({ id: "profile-1" }));
     await apiRequest("users/me");
     expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get("Authorization"))
       .toBe("Bearer access-one");
+  });
+
+  it("signs up with credentials and stores the returned access token", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(response(firstSession));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { signUp } = await import("../src/service/auth.service");
+    await signUp({ email: "reader@example.com", password: "correct-password" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:3000/auth/sign-up",
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      }),
+    );
+    expect(localStorage.getItem("quiescent_access_token")).toBe("access-one");
   });
 
   it("restores with the HttpOnly cookie and sends no refresh-token body", async () => {
@@ -63,6 +84,22 @@ describe("web auth API client", () => {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
     });
+  });
+
+  it("sends logout with cookies and clears the saved access token if the request fails", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("network failure"));
+    vi.stubGlobal("fetch", fetchMock);
+    const { setAccessToken } = await import("../src/service/api.service");
+    const { logout } = await import("../src/service/auth.service");
+    setAccessToken("access-one");
+
+    await expect(logout()).rejects.toThrow("network failure");
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:3000/auth/logout", {
+      method: "POST",
+      credentials: "include",
+    });
+    expect(localStorage.getItem("quiescent_access_token")).toBeNull();
   });
 
   it("shares one refresh across concurrent 401 responses and retries each request once", async () => {
@@ -88,6 +125,7 @@ describe("web auth API client", () => {
       apiRequest("users/me"),
     ])).resolves.toEqual([{ ok: true }, { ok: true }]);
     expect(refreshCalls).toBe(1);
+    // 1 login, 2 articles and profile requests, 1 refresh, 2 retries = 6 total calls
     expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 

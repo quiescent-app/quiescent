@@ -7,9 +7,8 @@ import {
   logout as requestLogout,
   refreshSession,
   signUp as requestSignUp,
-  type AuthUser,
-  type Credentials,
 } from "../service/auth.service";
+import type { AuthUser, Credentials } from "../types/auth";
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");

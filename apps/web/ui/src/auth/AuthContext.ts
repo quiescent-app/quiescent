@@ -1,5 +1,5 @@
 import { createContext } from "react";
-import type { AuthUser, Credentials } from "../service/auth.service";
+import type { AuthUser, Credentials } from "../types/auth";
 
 export type AuthStatus = "loading" | "authenticated" | "unauthenticated";
 
