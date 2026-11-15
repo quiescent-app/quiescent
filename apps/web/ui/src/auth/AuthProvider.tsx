@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { AuthContext, type AuthStatus } from "./AuthContext";
+import { clearAccessToken, subscribeToAuthLoss } from "../service/api.service";
 import {
-  clearAccessToken,
   login as requestLogin,
   logout as requestLogout,
   refreshSession,
   signUp as requestSignUp,
-  subscribeToAuthLoss,
   type AuthUser,
   type Credentials,
-} from "./authApi";
+} from "../service/auth.service";
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");

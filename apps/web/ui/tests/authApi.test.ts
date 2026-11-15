@@ -1,12 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  apiRequest,
-  clearAccessToken,
-  login,
-  refreshSession,
-  subscribeToAuthLoss,
-} from "../src/auth/authApi";
+import { apiRequest, clearAccessToken, subscribeToAuthLoss } from "../src/service/api.service";
+import { login, refreshSession } from "../src/service/auth.service";
 
 const firstSession = {
   user: {
