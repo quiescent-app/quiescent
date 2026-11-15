@@ -35,16 +35,29 @@ export function signUp(credentials: Credentials): Promise<AuthSession> {
 }
 
 let refreshInFlight: Promise<AuthSession | null> | null = null;
+const REFRESH_LOCK_NAME = "quiescent-auth-refresh";
+
+/** Holds the browser-wide lock through response parsing and cookie rotation. */
+function requestRefresh(): Promise<AuthSession> {
+  if (navigator.locks) {
+    return navigator.locks.request(REFRESH_LOCK_NAME, () => requestSession("auth/refresh"));
+  }
+  // Preserve refresh behavior in browsers and test environments without Web Locks.
+  return requestSession("auth/refresh");
+}
+
 /**
  * Refreshes the session using the browser's HttpOnly refresh cookie.
  * Saves the new access token; the browser handles the rotated refresh cookie.
  * Concurrent callers wait for the same refresh request.
+ * Uses the Web Locks API to ensure that only one refresh request is in flight at a time
+ *  when multiple tabs or concurrent calls attempt to refresh the session.
  *
  * @returns The refreshed session, or null after clearing the access token on failure.
  */
 export function refreshSession(): Promise<AuthSession | null> {
   if (!refreshInFlight) {
-    refreshInFlight = requestSession("auth/refresh")
+    refreshInFlight = requestRefresh()
       .catch(() => {
         setAccessToken(null);
         return null;
