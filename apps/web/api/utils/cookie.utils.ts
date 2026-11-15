@@ -32,6 +32,7 @@ export function getRefreshCookieOptions(environment: NodeJS.ProcessEnv = process
 }
 
 export function getClearRefreshCookieOptions(environment: NodeJS.ProcessEnv = process.env) {
-  const { maxAge: _maxAge, ...options } = getRefreshCookieOptions(environment);
+  const { maxAge, ...options } = getRefreshCookieOptions(environment);
+  void maxAge;
   return options;
 }
