@@ -13,7 +13,16 @@ const mocks = vi.hoisted(() => ({
   clearAccessToken: vi.fn(),
 }));
 
-vi.mock("../src/auth/authApi", () => mocks);
+vi.mock("../src/service/api.service", () => ({
+  subscribeToAuthLoss: mocks.subscribeToAuthLoss,
+  clearAccessToken: mocks.clearAccessToken,
+}));
+vi.mock("../src/service/auth.service", () => ({
+  refreshSession: mocks.refreshSession,
+  login: mocks.login,
+  signUp: mocks.signUp,
+  logout: mocks.logout,
+}));
 
 const session = {
   user: {
