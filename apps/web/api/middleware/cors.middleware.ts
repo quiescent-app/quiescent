@@ -23,6 +23,7 @@ export function corsMiddleware(): RequestHandler {
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
       res.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS);
+      res.setHeader("Access-Control-Max-Age", "600");
     }
 
     if (req.method === "OPTIONS") {
