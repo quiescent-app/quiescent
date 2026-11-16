@@ -5,8 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 import App from "../src/App";
 import AuthProvider from "../src/auth/AuthProvider";
 
-vi.mock("../src/service/api.service", () => ({
+vi.mock("../src/auth/authEvents", () => ({
   subscribeToAuthLoss: vi.fn(() => () => undefined),
+}));
+
+vi.mock("../src/auth/tokenStore", () => ({
   clearAccessToken: vi.fn(),
 }));
 
