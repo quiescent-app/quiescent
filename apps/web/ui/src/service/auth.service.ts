@@ -1,11 +1,8 @@
-import {
-  apiUrl,
-  parseResponse,
-  setAccessToken,
-} from "./api.service";
+import { apiUrl, parseResponse } from "../api/http";
+import { setAccessToken } from "../auth/tokenStore";
 import type { AuthSession, Credentials } from "../types/auth";
 
-export { ApiError as AuthApiError } from "./api.service";
+export { ApiError as AuthApiError } from "../api/http";
 
 /**
  * Posts to a session endpoint and saves the returned access token before resolving.

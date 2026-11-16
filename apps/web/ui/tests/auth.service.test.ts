@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { apiRequest, clearAccessToken, subscribeToAuthLoss } from "../src/service/api.service";
+import { apiRequest } from "../src/api/apiClient";
+import { clearAccessToken, setAccessToken } from "../src/auth/tokenStore";
+import { subscribeToAuthLoss } from "../src/auth/authEvents";
 import { login, refreshSession } from "../src/service/auth.service";
 
 const firstSession = {
@@ -89,7 +91,6 @@ describe("web auth API client", () => {
   it("sends logout with cookies and clears the saved access token if the request fails", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("network failure"));
     vi.stubGlobal("fetch", fetchMock);
-    const { setAccessToken } = await import("../src/service/api.service");
     const { logout } = await import("../src/service/auth.service");
     setAccessToken("access-one");
 

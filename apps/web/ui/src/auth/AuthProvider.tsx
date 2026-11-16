@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { AuthContext, type AuthStatus } from "./AuthContext";
-import { clearAccessToken, subscribeToAuthLoss } from "../service/api.service";
+import { subscribeToAuthLoss } from "./authEvents";
+import { clearAccessToken } from "./tokenStore";
 import {
   login as requestLogin,
   logout as requestLogout,
