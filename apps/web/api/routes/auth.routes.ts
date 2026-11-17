@@ -3,6 +3,12 @@ import { Router, type RequestHandler } from "express";
 import { authController } from "../controller/auth.controller.js";
 import { AppError, HttpStatus } from "../errors/appError.js";
 import { requireAuth } from "../middleware/auth.middleware.js";
+import { requireWebOrigin } from "../middleware/cors.middleware.js";
+import {
+  getClearRefreshCookieOptions,
+  readRefreshCookie,
+  REFRESH_COOKIE_NAME,
+} from "../utils/cookie.utils.js";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -51,10 +57,10 @@ const requireLogoutRefreshToken: RequestHandler = (req, _res, next) => {
 };
 const router = Router();
 
-router.post("/sign-up", requireCredentials, authController.signUp);
-router.post("/login", requireCredentials, authController.login);
-router.post("/refresh", requireRefreshToken, authController.refresh);
-router.post("/logout", requireLogoutRefreshToken, authController.logout);
+router.post("/sign-up", requireWebOrigin(), requireCredentials, authController.signUp);
+router.post("/login", requireWebOrigin(), requireCredentials, authController.login);
+router.post("/refresh", requireWebOrigin(), requireRefreshToken, authController.refresh);
+router.post("/logout", requireWebOrigin(), requireLogoutRefreshToken, authController.logout);
 router.post("/extension-session", requireAuth(), authController.extensionSession);
 
 export default router;
