@@ -2,7 +2,7 @@ name: PR Status Labels
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
     types: [opened, reopened, edited, synchronize, ready_for_review, converted_to_draft, closed]
   pull_request_review:
