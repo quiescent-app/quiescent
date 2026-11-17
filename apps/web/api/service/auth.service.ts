@@ -18,13 +18,14 @@ import {
   hashRefreshToken,
 } from "../utils/token.utils.js";
 
+import { REFRESH_COOKIE_MAX_AGE_MS } from "../utils/cookie.utils.js";
+
 type AuthResult = {
   user: AuthUser;
   accessToken: string;
   refreshToken: string;
 }
 
-const REFRESH_TOKEN_LIFETIME_MILLISECONDS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const MIN_PASSWORD_LENGTH = 8;
 
 export interface PasswordHasher {
@@ -97,7 +98,7 @@ export class AuthService {
     const rotated = await refreshTokenModel.rotate(
       oldHash,
       hashRefreshToken(replacementToken),
-      new Date(Date.now() + REFRESH_TOKEN_LIFETIME_MILLISECONDS),
+      new Date(Date.now() + REFRESH_COOKIE_MAX_AGE_MS),
     );
 
     if (!rotated) {
@@ -133,7 +134,7 @@ export class AuthService {
       userId: user.id,
       familyId,
       tokenHash: hashRefreshToken(refreshToken),
-      expiresAt: new Date(Date.now() + REFRESH_TOKEN_LIFETIME_MILLISECONDS),
+      expiresAt: new Date(Date.now() + REFRESH_COOKIE_MAX_AGE_MS),
     });
 
     return { user: toAuthUser(user), accessToken, refreshToken };

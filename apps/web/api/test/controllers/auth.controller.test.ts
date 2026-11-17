@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { authController } from "../../controller/auth.controller.js";
-import { HttpStatus } from "../../errors/appError.js";
+import { AppError, HttpStatus } from "../../errors/appError.js";
 import { authService } from "../../service/auth.service.js";
 
 const authResult = {
@@ -26,6 +26,8 @@ function makeResponse(): Response {
     status: vi.fn().mockReturnThis(),
     json: vi.fn().mockReturnThis(),
     end: vi.fn().mockReturnThis(),
+    cookie: vi.fn().mockReturnThis(),
+    clearCookie: vi.fn().mockReturnThis(),
   } as unknown as Response;
 }
 
@@ -47,7 +49,17 @@ describe("AuthController", () => {
       password: "correct-password",
     });
     expect(response.status).toHaveBeenCalledWith(HttpStatus.CREATED);
-    expect(response.json).toHaveBeenCalledWith(authResult);
+    expect(response.cookie).toHaveBeenCalledWith("quiescent_refresh", "refresh-token", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    expect(response.json).toHaveBeenCalledWith({
+      user: authResult.user,
+      accessToken: authResult.accessToken,
+    });
   });
 
   it("should log in credentials and return status code 200 with session data", async () => {
@@ -65,7 +77,17 @@ describe("AuthController", () => {
       password: "correct-password",
     });
     expect(response.status).toHaveBeenCalledWith(HttpStatus.OK);
-    expect(response.json).toHaveBeenCalledWith(authResult);
+    expect(response.cookie).toHaveBeenCalledWith("quiescent_refresh", "refresh-token", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    expect(response.json).toHaveBeenCalledWith({
+      user: authResult.user,
+      accessToken: authResult.accessToken,
+    });
   });
 
   it("should refresh a session and return status code 200 with replacement session data", async () => {
@@ -80,7 +102,36 @@ describe("AuthController", () => {
 
     expect(refresh).toHaveBeenCalledWith("old-refresh-token");
     expect(response.status).toHaveBeenCalledWith(HttpStatus.OK);
-    expect(response.json).toHaveBeenCalledWith(authResult);
+    expect(response.cookie).toHaveBeenCalledWith("quiescent_refresh", "refresh-token", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    expect(response.json).toHaveBeenCalledWith({
+      user: authResult.user,
+      accessToken: authResult.accessToken,
+    });
+  });
+
+  it("should clear the refresh cookie when refresh returns an invalid-token error", async () => {
+    const invalidToken = new AppError(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+    vi.spyOn(authService, "refresh").mockRejectedValue(invalidToken);
+    const response = makeResponse();
+
+    await expect(authController.refresh(
+      makeRequest({ refreshToken: "expired-token" }),
+      response,
+      vi.fn(),
+    )).rejects.toBe(invalidToken);
+
+    expect(response.clearCookie).toHaveBeenCalledWith("quiescent_refresh", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth",
+    });
   });
 
   it("should log out and return status code 204 with no content", async () => {
@@ -94,7 +145,26 @@ describe("AuthController", () => {
     );
 
     expect(logout).toHaveBeenCalledWith("refresh-token");
+    expect(response.clearCookie).toHaveBeenCalledWith("quiescent_refresh", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth",
+    });
     expect(response.status).toHaveBeenCalledWith(HttpStatus.NO_CONTENT);
     expect(response.end).toHaveBeenCalledOnce();
+  });
+
+  it("should clear the refresh cookie even when logout revocation fails", async () => {
+    vi.spyOn(authService, "logout").mockRejectedValue(new Error("database unavailable"));
+    const response = makeResponse();
+
+    await expect(authController.logout(
+      makeRequest({ refreshToken: "refresh-token" }),
+      response,
+      vi.fn(),
+    )).rejects.toThrow("database unavailable");
+
+    expect(response.clearCookie).toHaveBeenCalledOnce();
   });
 });
