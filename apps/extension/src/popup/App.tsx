@@ -28,10 +28,8 @@ function App() {
   const [pageKey, setPageKey] = useState<string | null>(null);
   const [checkedPageKey, setCheckedPageKey] = useState<string | null>(null);
   const [progressState, setProgressState] = useState<ProgressState>({ status: "idle" });
-  const activeArticleUrl = useRef<string | null>(null);
   const savingArticleUrl = useRef<string | null>(null);
   const completedSaves = useRef(new Map<string, "saved" | "already-saved">());
-  const pageRequestId = useRef(0);
   const trackedTabId = useRef<number | null>(null);
   const trackedPageUrl = useRef<string | null>(null);
   const currentPageKey = useRef<string | null>(null);
