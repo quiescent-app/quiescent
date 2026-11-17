@@ -7,9 +7,12 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: work-pickup-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   pickup:
-    # Self-assignment, and the assigner is the only assignee (picked up from unassigned)
     if: >-
       github.event.sender.login == github.event.assignee.login &&
       join(github.event.issue.assignees.*.login, ',') == github.event.assignee.login
@@ -27,7 +30,6 @@ jobs:
 
       - name: Read current status
         id: read
-        continue-on-error: true # fails if the issue isn't on the Task board -> just skip the rest
         uses: github/update-project-action@v4
         with:
           github_token: ${{ steps.app-token.outputs.token }}
@@ -50,7 +52,11 @@ jobs:
           value: In progress
 
       - name: Send Slack Notification
-        if: ${{ always() && steps.read.outputs.field_read_value == 'Ready' }}
+        if: >-
+             ${{ !cancelled() && 
+                 steps.read.outcome == 'success' &&
+                 steps.read.outputs.field_read_value == 'Ready'
+              }}
         uses: slackapi/slack-github-action@v4.0.0
         with:
           method: chat.postMessage
@@ -58,12 +64,12 @@ jobs:
           errors: true
           payload: |
             channel: ${{ secrets.SLACK_CHANNEL_ID }}
-            text: "Work picked up: #${{ github.event.issue.number }}"
+            text: "Work picked up: #${{ github.event.issue.number }} by ${{ github.event.assignee.login }}"
             blocks:
               - type: header
                 text:
                   type: plain_text
-                  text: "Work picked up: #${{ github.event.issue.number }}"
+                  text: "Work picked up: #${{ github.event.issue.number }} by ${{ github.event.assignee.login }}"
               - type: section
                 text:
                   type: mrkdwn
