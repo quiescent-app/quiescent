@@ -9,6 +9,9 @@ on:
     types: [submitted, edited, dismissed]
   check_run:
     types: [completed]
+  workflow_run:
+    workflows: ["Makefile CI", "PR Naming Validation"]
+    types: [completed]
   status: {}
 
 permissions:

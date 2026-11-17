@@ -249,7 +249,8 @@ def pull_request_numbers_from_event(event, repository):
         return [payload["number"]]
 
     sha = (
-        payload.get("check_run", {}).get("head_sha")
+        payload.get("workflow_run", {}).get("head_sha")
+        or payload.get("check_run", {}).get("head_sha")
         or payload.get("check_suite", {}).get("head_sha")
         or payload.get("sha")
     )
