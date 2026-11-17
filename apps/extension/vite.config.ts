@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+﻿import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => ({
         const manifestPath = fileURLToPath(new URL("./dist/manifest.json", import.meta.url));
         const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
         manifest.host_permissions = [`${api.protocol}//${api.hostname}/*`];
+        const web = new URL(loadEnv(mode, fileURLToPath(new URL(".", import.meta.url)), "VITE_").VITE_WEB_BASE_URL || "http://localhost:5173");
+        manifest.externally_connectable = { matches: [`${web.protocol}//${web.hostname}/*`] };
         writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
       },
     },
