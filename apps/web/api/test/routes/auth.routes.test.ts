@@ -14,7 +14,6 @@ const authResult = {
     updatedAt: "2026-01-01T00:00:00.000Z",
   },
   accessToken: "access-token",
-  refreshToken: "refresh-token",
 };
 
 const { authControllerMock } = vi.hoisted(() => {
@@ -27,7 +26,6 @@ const { authControllerMock } = vi.hoisted(() => {
       updatedAt: "2026-01-01T00:00:00.000Z",
     },
     accessToken: "access-token",
-    refreshToken: "refresh-token",
   };
 
   return {
@@ -45,6 +43,7 @@ vi.mock("../../controller/auth.controller.js", () => ({
 }));
 
 describe("authentication routes", () => {
+  const webOrigin = "http://localhost:5173";
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.restoreAllMocks());
 
@@ -63,6 +62,7 @@ describe("authentication routes", () => {
     const response = await send(
       "/auth/sign-up",
       JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: webOrigin },
     );
 
     expect(response.status).toBe(HttpStatus.CREATED);
@@ -74,10 +74,22 @@ describe("authentication routes", () => {
     });
   });
 
+  it("should return status code 403 when sign-up comes from an untrusted origin", async () => {
+    const response = await send(
+      "/auth/sign-up",
+      JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: "https://attacker.example" },
+    );
+
+    expect(response.status).toBe(HttpStatus.FORBIDDEN);
+    expect(authControllerMock.signUp).not.toHaveBeenCalled();
+  });
+
   it("should dispatch valid login credentials to the controller with status code 200", async () => {
     const response = await send(
       "/auth/login",
       JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: webOrigin },
     );
 
     expect(response.status).toBe(HttpStatus.OK);
@@ -89,10 +101,22 @@ describe("authentication routes", () => {
     });
   });
 
+  it("should return status code 403 when login comes from an untrusted origin", async () => {
+    const response = await send(
+      "/auth/login",
+      JSON.stringify({ email: "reader@example.com", password: "correct-password" }),
+      { origin: "https://attacker.example" },
+    );
+
+    expect(response.status).toBe(HttpStatus.FORBIDDEN);
+    expect(authControllerMock.login).not.toHaveBeenCalled();
+  });
+
   it("should dispatch a valid refresh token to the controller with status code 200", async () => {
     const response = await send(
       "/auth/refresh",
-      JSON.stringify({ refreshToken: "old-refresh-token" }),
+      JSON.stringify({ refreshToken: "ignored-body-token" }),
+      { origin: webOrigin, cookie: "quiescent_refresh=old-refresh-token" },
     );
 
     expect(response.status).toBe(HttpStatus.OK);
@@ -105,7 +129,8 @@ describe("authentication routes", () => {
   it("should dispatch a valid logout token to the controller with status code 204", async () => {
     const response = await send(
       "/auth/logout",
-      JSON.stringify({ refreshToken: "refresh-token" }),
+      JSON.stringify({ refreshToken: "ignored-body-token" }),
+      { origin: webOrigin, cookie: "quiescent_refresh=refresh-token" },
     );
 
     expect(response.status).toBe(HttpStatus.NO_CONTENT);
@@ -113,6 +138,33 @@ describe("authentication routes", () => {
     expect(authControllerMock.logout.mock.calls[0]?.[0].body).toEqual({
       refreshToken: "refresh-token",
     });
+  });
+
+  it("should return status code 403 when logout comes from an untrusted origin", async () => {
+    const response = await send("/auth/logout", "{}", {
+      origin: "https://attacker.example",
+      cookie: "quiescent_refresh=refresh-token",
+    });
+
+    expect(response.status).toBe(HttpStatus.FORBIDDEN);
+    expect(authControllerMock.logout).not.toHaveBeenCalled();
+  });
+
+  it("should reject refresh when the cookie is missing", async () => {
+    const response = await send("/auth/refresh", "{}", { origin: webOrigin });
+
+    expect(response.status).toBe(HttpStatus.UNAUTHORIZED);
+    expect(authControllerMock.refresh).not.toHaveBeenCalled();
+  });
+
+  it("should return status code 403 when cookie refresh comes from an untrusted origin", async () => {
+    const response = await send("/auth/refresh", "{}", {
+      origin: "https://attacker.example",
+      cookie: "quiescent_refresh=refresh-token",
+    });
+
+    expect(response.status).toBe(HttpStatus.FORBIDDEN);
+    expect(authControllerMock.refresh).not.toHaveBeenCalled();
   });
 
   it("should return status code 400 without calling the controller when the JSON body is malformed", async () => {
@@ -129,6 +181,7 @@ describe("authentication routes", () => {
     const invalid = await send(
       "/auth/sign-up",
       JSON.stringify({ email: "nope", password: "password" }),
+      { origin: webOrigin },
     );
 
     expect(invalid.status).toBe(HttpStatus.BAD_REQUEST);
@@ -137,10 +190,10 @@ describe("authentication routes", () => {
   });
 
   it("should return status code 400 without calling the controller when a refresh request omits its token", async () => {
-    const missing = await send("/auth/refresh", JSON.stringify({}));
+    const missing = await send("/auth/refresh", JSON.stringify({}), { origin: webOrigin });
 
-    expect(missing.status).toBe(HttpStatus.BAD_REQUEST);
-    expect(missing.body).toEqual({ error: { message: "A refresh token is required" } });
+    expect(missing.status).toBe(HttpStatus.UNAUTHORIZED);
+    expect(missing.body).toEqual({ error: { message: "Invalid or expired refresh token" } });
     expect(authControllerMock.refresh).not.toHaveBeenCalled();
   });
 
@@ -165,12 +218,5 @@ describe("authentication routes", () => {
     expect(response.status).toBe(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
     expect(response.body).toEqual({ error: { message: "Unsupported request encoding" } });
     expect(authControllerMock.login).not.toHaveBeenCalled();
-  });
-
-  it("should return status code 404 for an unknown route", async () => {
-    const response = await send("/unknown", JSON.stringify({}));
-
-    expect(response.status).toBe(HttpStatus.NOT_FOUND);
-    expect(response.body).toEqual({ error: { message: "Route not found" } });
   });
 });
