@@ -4,7 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/useAuth";
 
-import "./landing.css";
+import "@/styles/landingPage.css";
 
 const sections = [
   { id: "save", label: "Save" },
