@@ -8,11 +8,13 @@ import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import LibraryPage from "@/pages/LibraryPage";
 import AccountPage from "@/pages/AccountPage";
+import LandingPage from "@/pages/LandingPage";
 
 export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/" element={<LandingPage />} />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
@@ -26,7 +28,6 @@ export default function App() {
         </Route>
       </Route>
 
-      <Route path="/" element={<Navigate to="/library" replace />} />
       <Route path="*" element={<Navigate to="/library" replace />} />
     </Routes>
   );
