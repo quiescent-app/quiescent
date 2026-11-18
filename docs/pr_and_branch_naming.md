@@ -98,7 +98,7 @@ The invalid example uses `fix` instead of `feat`.
 
 ## Automated Validation
 
-Every pull request targeting `main` is automatically checked by the **PR Naming Validation** GitHub Actions workflow.
+Every pull request targeting `main` or `dev` is automatically checked by the **PR Naming Validation** GitHub Actions workflow.
 
 The validation checks:
 

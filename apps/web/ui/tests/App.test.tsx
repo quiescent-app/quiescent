@@ -1,0 +1,37 @@
+import { render } from "@testing-library/react";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+
+import routes from "../src/App";
+import AuthProvider from "../src/auth/AuthProvider";
+
+vi.mock("../src/auth/authEvents", () => ({
+  subscribeToAuthLoss: vi.fn(() => () => undefined),
+}));
+
+vi.mock("../src/auth/tokenStore", () => ({
+  clearAccessToken: vi.fn(),
+}));
+
+vi.mock("../src/service/auth.service", () => ({
+  refreshSession: vi.fn().mockResolvedValue(null),
+  login: vi.fn(),
+  signUp: vi.fn(),
+  logout: vi.fn(),
+}));
+
+vi.mock("../src/hooks/use-mobile", () => ({
+  useIsMobile: () => false,
+}));
+
+describe("App", () => {
+  it("renders without crashing", () => {
+    const { container } = render(
+      <AuthProvider>
+        <RouterProvider router={createMemoryRouter(routes)} />
+      </AuthProvider>,
+    );
+
+    expect(container).toBeTruthy();
+  });
+});
