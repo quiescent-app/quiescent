@@ -10,7 +10,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, HttpStatus } from "../../errors/appError.js";
-import { createS3PhotoStorage } from "../../service/s3-photo.storage.js";
+import { createS3Storage } from "../../storage/s3.storage.js";
 
 // Keep signing local while asserting the policy passed to the AWS helpers.
 vi.mock("@aws-sdk/s3-presigned-post", () => ({
@@ -22,31 +22,34 @@ vi.mock("@aws-sdk/s3-request-presigner", () => ({
   getSignedUrl: vi.fn().mockResolvedValue("https://s3.example/read"),
 }));
 
-describe("createS3PhotoStorage", () => {
+describe("createS3Storage", () => {
   const bucket = "quiescent-photos-dev";
   let send: ReturnType<typeof vi.fn>;
   let client: S3Client;
-  let storage: ReturnType<typeof createS3PhotoStorage>;
+  let storage: ReturnType<typeof createS3Storage>;
 
   beforeEach(() => {
     // A fake client captures SDK commands without contacting S3.
     send = vi.fn();
     client = { send } as unknown as S3Client;
-    storage = createS3PhotoStorage(client, bucket);
+    storage = createS3Storage(client, bucket);
   });
 
-  it("signs a private upload form for the exact key, type, size, and lifetime", async () => {
-    const result = await storage.createUploadTarget("pending/id", "image/png", 5_242_880, 300);
+  it.each(["image/png", "application/pdf"])(
+    "signs a private upload form for %s with the exact key, type, size, and lifetime",
+    async (contentType) => {
+      const result = await storage.createUploadTarget("pending/id", contentType, 5_242_880, 300);
 
-    expect(result).toEqual({ url: "https://s3.example/upload", fields: { key: "pending/id" } });
-    expect(createPresignedPost).toHaveBeenCalledWith(client, {
-      Bucket: bucket,
-      Key: "pending/id",
-      Conditions: [["content-length-range", 1, 5_242_880], ["eq", "$Content-Type", "image/png"]],
-      Fields: { "Content-Type": "image/png" },
-      Expires: 300,
-    });
-  });
+      expect(result).toEqual({ url: "https://s3.example/upload", fields: { key: "pending/id" } });
+      expect(createPresignedPost).toHaveBeenCalledWith(client, {
+        Bucket: bucket,
+        Key: "pending/id",
+        Conditions: [["content-length-range", 1, 5_242_880], ["eq", "$Content-Type", contentType]],
+        Fields: { "Content-Type": contentType },
+        Expires: 300,
+      });
+    },
+  );
 
   it("inspects size and treats a missing key as absent", async () => {
     send.mockResolvedValueOnce({ ContentLength: 42 });

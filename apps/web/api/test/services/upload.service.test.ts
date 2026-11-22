@@ -2,6 +2,7 @@ import sharp from "sharp";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AppError, HttpStatus } from "../../errors/appError.js";
+import type { S3Storage } from "../../storage/s3.storage.js";
 
 import {
   PHOTO_MAX_SIZE_BYTES,
@@ -9,14 +10,13 @@ import {
   PHOTO_UPLOAD_TTL_SECONDS,
   UploadService,
   type PendingPhotoUpload,
-  type PhotoStorage,
   type ReadyPhoto,
 } from "../../service/upload.service.js";
 
 describe("UploadService", () => {
   // Freeze time so upload expiry checks do not depend on when the suite runs.
   const now = new Date("2026-01-01T00:00:00.000Z");
-  let storage: PhotoStorage;
+  let storage: S3Storage;
   let service: UploadService;
   let png: Buffer;
   let pending: PendingPhotoUpload;
@@ -39,7 +39,7 @@ describe("UploadService", () => {
       delete: vi.fn().mockResolvedValue(undefined),
     };
     service = new UploadService();
-    (service as unknown as { storage: PhotoStorage }).storage = storage;
+    (service as unknown as { storage: S3Storage }).storage = storage;
     pending = {
       id: "upload-id",
       ownerId: "user-id",
@@ -83,7 +83,7 @@ describe("UploadService", () => {
     );
   });
 
-  it.each(["image/gif", "text/html", ""])("rejects unsupported type %s", async (contentType) => {
+  it.each(["image/gif", "application/pdf", "text/html", ""])("rejects unsupported type %s", async (contentType) => {
     await expect(service.prepareUpload("user-id", { contentType, sizeBytes: 100 }))
       .rejects.toMatchObject({
         statusCode: HttpStatus.UNSUPPORTED_MEDIA_TYPE,
