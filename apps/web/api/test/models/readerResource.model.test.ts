@@ -24,7 +24,7 @@ describe("ReaderResourceModel", () => {
   let owner: ReaderOwner;
   let other: ReaderOwner;
   const resources = new ReaderResourceModel();
-  const input = { sourceType: "url", canonicalUrl: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
+  const input = { sourceType: "url", url: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
   const createResource = () => resources.create(owner, input);
 
   beforeEach(async () => {
@@ -54,7 +54,7 @@ describe("ReaderResourceModel", () => {
     const old = new Date("2025-01-01T00:00:00Z");
     const recent = new Date("2025-02-01T00:00:00Z");
     const rows = await db.insert(readerResources).values([0, 1, 2, 3].map((index) => ({
-      ...input, userId: owner.userId, status, canonicalUrl: `${input.canonicalUrl}/${index}`,
+      ...input, userId: owner.userId, status, url: `${input.url}/${index}`,
       lastAccessedAt: index < 2 ? (index === 0 ? old : recent) : null, createdAt: index === 2 ? old : recent,
     }))).returning();
     await db.insert(readerResources).values({ ...input, userId: other.userId, status });
@@ -89,7 +89,7 @@ describe("ReaderResourceModel", () => {
   });
 
   it("should store PDF placeholders without allowing an upload reference", async () => {
-    const resource = await resources.create(owner, { sourceType: "pdf", title: "PDF placeholder", canonicalUrl: null, sourceDomain: null });
+    const resource = await resources.create(owner, { sourceType: "pdf", title: "PDF placeholder", url: null, sourceDomain: null });
     expect(resource).toMatchObject({ status: "not_started", pdfObjectReference: null });
     await expect(db.update(readerResources).set({ pdfObjectReference: "private-key" }).where(eq(readerResources.id, resource.id)))
       .rejects.toMatchObject({ cause: { code: "23514" } });
@@ -115,7 +115,7 @@ describe("ReaderResourceModel", () => {
     const resource = await createResource();
     const checks = [
       ["title=''", "reader_resource_title_check"],
-      ["canonical_url=NULL", "reader_resource_source_check"],
+      ["url=NULL", "reader_resource_source_check"],
       ["pdf_object_reference='private-key'", "reader_resource_source_check"],
       ["status='invalid'", "reader_resource_status_check"],
     ];

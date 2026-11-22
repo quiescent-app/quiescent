@@ -16,7 +16,7 @@ export type OpeningResourceStatusChange = {
 };
 
 function usableSource() {
-  return sql`((${readerResources.sourceType} = 'url' AND ${readerResources.canonicalUrl} IS NOT NULL)
+  return sql`((${readerResources.sourceType} = 'url' AND ${readerResources.url} IS NOT NULL)
     OR (${readerResources.sourceType} = 'pdf' AND ${readerResources.pdfObjectReference} IS NOT NULL))`;
 }
 

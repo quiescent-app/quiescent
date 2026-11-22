@@ -30,7 +30,7 @@ describe("ReaderSessionModel", () => {
   type Statement = { text: string; params: unknown[]; options: { arrayMode?: boolean } };
   const resources = new ReaderResourceModel();
   const sessions = new ReaderSessionModel();
-  const input = { sourceType: "url", canonicalUrl: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
+  const input = { sourceType: "url", url: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
   const position = { progress: 45, scrollOffset: 2400, pageNumber: null, navigationState: "history" } as const;
   const opening = { from: "not_started", to: "reading" } as const;
   const active = { allowedPredecessors: ["active"], requireUsableSource: true } as const;
@@ -169,7 +169,7 @@ describe("ReaderSessionModel", () => {
 
   it.each(["pdf", "position"] as const)("should return null without changing records for an unavailable source or invalid position (%s)", async (kind) => {
     const resource = await resources.create(owner, kind === "pdf"
-      ? { sourceType: "pdf", title: "PDF placeholder", canonicalUrl: null, sourceDomain: null } : input);
+      ? { sourceType: "pdf", title: "PDF placeholder", url: null, sourceDomain: null } : input);
     const [visit] = await db.insert(readerSessions).values({ userId: owner.userId, resourceId: resource.id, pageNumber: 2 }).returning();
     expect(await sessions.open(owner, resource.id, opening)).toBeNull();
     expect(await sessions.updateProgress(owner, visit!.id, { ...position, pageNumber: 2, scrollOffset: null }, ["active"])).toBeNull();

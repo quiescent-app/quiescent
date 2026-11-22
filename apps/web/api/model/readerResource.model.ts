@@ -4,7 +4,7 @@ import { readerResources, type ReaderResource } from "../schema/readerResource.s
 
 export type ReaderOwner = Readonly<{ userId: string }>;
 export type CreateReaderResourceInput = Pick<
-  ReaderResource, "sourceType" | "title" | "canonicalUrl" | "sourceDomain"
+  ReaderResource, "sourceType" | "title" | "url" | "sourceDomain"
 >;
 
 /** Saves and retrieves a user's saved articles and PDF resources. */
@@ -13,7 +13,7 @@ export class ReaderResourceModel {
   async create(owner: ReaderOwner, input: CreateReaderResourceInput): Promise<ReaderResource> {
     const [resource] = await database.insert(readerResources).values({
       userId: owner.userId, sourceType: input.sourceType, title: input.title,
-      canonicalUrl: input.canonicalUrl, sourceDomain: input.sourceDomain,
+      url: input.url, sourceDomain: input.sourceDomain,
     }).returning();
     if (!resource) throw new Error("Reader resource insert did not return a record");
     return resource;
