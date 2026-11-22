@@ -51,9 +51,22 @@ describe("createS3Storage", () => {
     },
   );
 
-  it("inspects size and treats a missing key as absent", async () => {
-    send.mockResolvedValueOnce({ ContentLength: 42 });
-    await expect(storage.inspect("pending/id")).resolves.toEqual({ sizeBytes: 42 });
+  it("binds metadata to the presigned POST fields and conditions", async () => {
+    await storage.createUploadTarget("pending/id", "image/png", 100, 300, { "declared-size": "42" });
+
+    expect(createPresignedPost).toHaveBeenCalledWith(client, {
+      Bucket: bucket,
+      Key: "pending/id",
+      Conditions: [["content-length-range", 1, 100], ["eq", "$Content-Type", "image/png"], { "x-amz-meta-declared-size": "42" }],
+      Fields: { "Content-Type": "image/png", "x-amz-meta-declared-size": "42" },
+      Expires: 300,
+    });
+  });
+
+  it("inspects size, content type, and metadata and treats a missing key as absent", async () => {
+    const metadata = { "declared-size": "42" };
+    send.mockResolvedValueOnce({ ContentLength: 42, ContentType: "image/png", Metadata: metadata });
+    await expect(storage.inspect("pending/id")).resolves.toEqual({ sizeBytes: 42, contentType: "image/png", metadata });
     expect(send.mock.calls[0]?.[0]).toBeInstanceOf(HeadObjectCommand);
     expect(send.mock.calls[0]?.[0].input).toEqual({ Bucket: bucket, Key: "pending/id" });
 

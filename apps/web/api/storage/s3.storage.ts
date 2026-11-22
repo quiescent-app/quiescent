@@ -21,21 +21,30 @@ export function createS3Storage(client: S3Client, bucket: string) {
       contentType: string,
       maxSizeBytes: number,
       expiresInSeconds: number,
+      metadata: Record<string, string> = {},
     ): Promise<{ url: string; fields: Record<string, string> }> {
+      const metadataFields = Object.fromEntries(
+        Object.entries(metadata).map(([name, value]) => [`x-amz-meta-${name}`, value]),
+      );
       return createPresignedPost(client, {
         Bucket: bucket,
         Key: key,
         Conditions: [
           ["content-length-range", 1, maxSizeBytes],
           ["eq", "$Content-Type", contentType],
+          ...Object.entries(metadataFields).map(([name, value]) => ({ [name]: value })),
         ],
-        Fields: { "Content-Type": contentType },
+        Fields: { "Content-Type": contentType, ...metadataFields },
         Expires: expiresInSeconds,
       });
     },
 
     /** Read object metadata without downloading its contents. */
-    async inspect(key: string): Promise<{ sizeBytes: number } | null> {
+    async inspect(key: string): Promise<{
+      sizeBytes: number;
+      contentType?: string;
+      metadata?: Record<string, string>;
+    } | null> {
       try {
         const object = await client.send(new HeadObjectCommand({
           Bucket: bucket,
@@ -44,7 +53,7 @@ export function createS3Storage(client: S3Client, bucket: string) {
         if (object.ContentLength === undefined) {
           throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "File storage failed");
         }
-        return { sizeBytes: object.ContentLength };
+        return { sizeBytes: object.ContentLength, contentType: object.ContentType, metadata: object.Metadata };
       } catch (error) {
         if (isMissingObject(error)) return null;
         throw error;

@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createApp } from "../../app.js";
+import type { UserController } from "../../controller/user.controller.js";
 import { HttpStatus } from "../../errors/appError.js";
 import { createAccessToken } from "../../utils/token.utils.js";
 
@@ -17,10 +18,10 @@ const { userControllerMock } = vi.hoisted(() => {
       getProfile: vi.fn<RequestHandler>(respond(200)),
       updateProfile: vi.fn<RequestHandler>(respond(200)),
       getProfileImage: vi.fn<RequestHandler>(respond(200)),
-      prepareProfileImage: vi.fn<RequestHandler>(respond(201)),
-      completeProfileImage: vi.fn<RequestHandler>(respond(200)),
+      prepareProfileImageUpload: vi.fn<RequestHandler>(respond(201)),
+      completeProfileImageUpload: vi.fn<RequestHandler>(respond(200)),
       deleteProfileImage: vi.fn<RequestHandler>(respond(204)),
-    },
+    } satisfies Record<keyof UserController, RequestHandler>,
   };
 });
 

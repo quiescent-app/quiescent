@@ -9,8 +9,6 @@ import {
   PHOTO_READ_TTL_SECONDS,
   PHOTO_UPLOAD_TTL_SECONDS,
   UploadService,
-  type PendingPhotoUpload,
-  type ReadyPhoto,
 } from "../../service/upload.service.js";
 
 describe("UploadService", () => {
@@ -19,7 +17,22 @@ describe("UploadService", () => {
   let storage: S3Storage;
   let service: UploadService;
   let png: Buffer;
-  let pending: PendingPhotoUpload;
+  const ownerId = "user-id";
+  const uploadId = "00000000-0000-4000-8000-000000000001";
+  const pendingKey = `pending/profile/${ownerId}/${uploadId}`;
+  const publishKey = `photos/profile/${ownerId}`;
+  const expiresAt = new Date(now.getTime() + PHOTO_UPLOAD_TTL_SECONDS * 1000);
+
+  function uploadedPhoto(contentType = "image/png", declaredSizeBytes = png.length) {
+    return {
+      contentType,
+      sizeBytes: declaredSizeBytes,
+      metadata: {
+        "declared-size": String(declaredSizeBytes),
+        "upload-expires-at": String(expiresAt.getTime()),
+      },
+    };
+  }
 
   beforeEach(async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -32,7 +45,7 @@ describe("UploadService", () => {
     }).png().toBuffer();
     storage = {
       createUploadTarget: vi.fn().mockResolvedValue({ url: "https://s3.example/upload", fields: {} }),
-      inspect: vi.fn().mockResolvedValue({ sizeBytes: png.length }),
+      inspect: vi.fn().mockResolvedValue(uploadedPhoto()),
       read: vi.fn().mockResolvedValue(png),
       copy: vi.fn().mockResolvedValue(undefined),
       createReadUrl: vi.fn().mockResolvedValue("https://s3.example/read"),
@@ -40,14 +53,6 @@ describe("UploadService", () => {
     };
     service = new UploadService();
     (service as unknown as { storage: S3Storage }).storage = storage;
-    pending = {
-      id: "upload-id",
-      ownerId: "user-id",
-      pendingKey: "pending/upload-id",
-      contentType: "image/png",
-      declaredSizeBytes: png.length,
-      expiresAt: new Date(now.getTime() + PHOTO_UPLOAD_TTL_SECONDS * 1000),
-    };
   });
 
   afterEach(() => {
@@ -76,10 +81,12 @@ describe("UploadService", () => {
     });
 
     expect(result.pending.ownerId).toBe("user-id");
-    expect(result.pending.pendingKey).toMatch(/^pending\/[0-9a-f-]{36}$/);
-    expect(result.target.expiresAt).toEqual(pending.expiresAt);
+    expect(result.pending.pendingKey).toBe(`pending/profile/user-id/${result.pending.id}`);
+    expect(result.pending.id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(result.target.expiresAt).toEqual(expiresAt);
     expect(storage.createUploadTarget).toHaveBeenCalledWith(
       result.pending.pendingKey, "image/png", PHOTO_MAX_SIZE_BYTES, PHOTO_UPLOAD_TTL_SECONDS,
+      { "declared-size": String(png.length), "upload-expires-at": String(expiresAt.getTime()) },
     );
   });
 
@@ -98,17 +105,19 @@ describe("UploadService", () => {
     },
   );
 
-  it("copies to an immutable final key and validates the copied bytes", async () => {
-    const result = await service.completeUpload(pending);
+  it("validates a staged copy before publishing the profile image", async () => {
+    await expect(service.completeUpload(ownerId, uploadId)).resolves.toEqual({ id: uploadId });
 
-    expect(result).toMatchObject({
-      ownerId: "user-id", contentType: "image/png", sizeBytes: png.length,
-      width: 2, height: 3,
-    });
-    expect(result.objectKey).toMatch(/^photos\/[0-9a-f-]{36}$/);
-    expect(storage.copy).toHaveBeenCalledWith(pending.pendingKey, result.objectKey);
-    expect(storage.read).toHaveBeenCalledWith(result.objectKey, PHOTO_MAX_SIZE_BYTES);
-    expect(storage.delete).toHaveBeenCalledWith(pending.pendingKey);
+    const stagedKey = vi.mocked(storage.copy).mock.calls[0]?.[1];
+    expect(stagedKey).toMatch(/^pending\/validated\/[0-9a-f-]{36}$/);
+    expect(storage.inspect).toHaveBeenCalledTimes(2);
+    expect(storage.inspect).toHaveBeenNthCalledWith(1, pendingKey);
+    expect(storage.inspect).toHaveBeenNthCalledWith(2, stagedKey);
+    expect(storage.copy).toHaveBeenNthCalledWith(1, pendingKey, stagedKey);
+    expect(storage.read).toHaveBeenCalledWith(stagedKey, PHOTO_MAX_SIZE_BYTES);
+    expect(storage.copy).toHaveBeenNthCalledWith(2, stagedKey, publishKey);
+    expect(storage.delete).toHaveBeenCalledWith(stagedKey);
+    expect(storage.delete).toHaveBeenCalledWith(pendingKey);
   });
 
   it.each([
@@ -116,61 +125,56 @@ describe("UploadService", () => {
     { contentType: "image/webp" as const, format: "webp" as const },
   ])("accepts decoded $contentType bytes", async ({ contentType, format }) => {
     const bytes = await sharp(png).toFormat(format).toBuffer();
-    pending.contentType = contentType;
-    pending.declaredSizeBytes = bytes.length;
-    vi.mocked(storage.inspect).mockResolvedValue({ sizeBytes: bytes.length });
+    vi.mocked(storage.inspect).mockResolvedValue(uploadedPhoto(contentType, bytes.length));
     vi.mocked(storage.read).mockResolvedValue(bytes);
 
-    await expect(service.completeUpload(pending)).resolves.toMatchObject({
-      contentType, sizeBytes: bytes.length, width: 2, height: 3,
-    });
+    await expect(service.completeUpload(ownerId, uploadId)).resolves.toEqual({ id: uploadId });
   });
 
-  it("rejects an expired upload before accessing storage", async () => {
-    pending.expiresAt = now;
-    await expect(service.completeUpload(pending)).rejects.toThrow("expired");
-    expect(storage.inspect).not.toHaveBeenCalled();
+  it("rejects an expired upload before copying", async () => {
+    vi.setSystemTime(expiresAt);
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toMatchObject({ statusCode: HttpStatus.NOT_FOUND });
+    expect(storage.copy).not.toHaveBeenCalled();
   });
 
   it("rejects missing and mismatched pending objects before copying", async () => {
     vi.mocked(storage.inspect).mockResolvedValueOnce(null);
-    await expect(service.completeUpload(pending)).rejects.toThrow("missing");
-    vi.mocked(storage.inspect).mockResolvedValueOnce({ sizeBytes: png.length + 1 });
-    await expect(service.completeUpload(pending)).rejects.toThrow("size does not match");
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toMatchObject({ statusCode: HttpStatus.NOT_FOUND });
+    vi.mocked(storage.inspect).mockResolvedValueOnce({ ...uploadedPhoto(), sizeBytes: png.length + 1 });
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toThrow("size does not match");
     expect(storage.copy).not.toHaveBeenCalled();
   });
 
   it("rejects a copied object whose size changes and removes it", async () => {
-    // The first HEAD sees the pending upload; the second sees the final copy.
+    // The first HEAD sees the pending upload; the second sees the staged copy.
     vi.mocked(storage.inspect)
-      .mockResolvedValueOnce({ sizeBytes: png.length })
+      .mockResolvedValueOnce(uploadedPhoto())
       .mockResolvedValueOnce({ sizeBytes: png.length + 1 });
-    await expect(service.completeUpload(pending)).rejects.toThrow("Copied photo size");
-    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^photos\//));
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toThrow("Copied photo size");
+    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^pending\/validated\//));
   });
 
   it("rejects a different image type even when it decodes", async () => {
     const jpeg = await sharp(png).jpeg().toBuffer();
-    pending.declaredSizeBytes = jpeg.length;
-    vi.mocked(storage.inspect).mockResolvedValue({ sizeBytes: jpeg.length });
+    vi.mocked(storage.inspect).mockResolvedValue(uploadedPhoto("image/png", jpeg.length));
     vi.mocked(storage.read).mockResolvedValue(jpeg);
 
-    await expect(service.completeUpload(pending)).rejects.toThrow("declared photo type");
-    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^photos\//));
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toThrow("declared photo type");
+    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^pending\/validated\//));
   });
 
-  it("rejects corrupt image bytes and removes the final copy", async () => {
+  it("rejects corrupt image bytes and removes the staged copy", async () => {
     const corrupt = Buffer.alloc(png.length, 0);
     vi.mocked(storage.read).mockResolvedValue(corrupt);
-    await expect(service.completeUpload(pending)).rejects.toThrow("invalid");
-    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^photos\//));
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toThrow("invalid");
+    expect(storage.delete).toHaveBeenCalledWith(expect.stringMatching(/^pending\/validated\//));
   });
 
   it("reports a cleanup failure after validation failure", async () => {
     // The final copy cannot be published when validation and its cleanup both fail.
     vi.mocked(storage.read).mockResolvedValue(Buffer.alloc(png.length));
     vi.mocked(storage.delete).mockRejectedValue(new Error("S3 unavailable"));
-    await expect(service.completeUpload(pending)).rejects.toMatchObject({
+    await expect(service.completeUpload(ownerId, uploadId)).rejects.toMatchObject({
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
       message: "Photo storage failed",
     } satisfies Partial<AppError>);
@@ -179,19 +183,13 @@ describe("UploadService", () => {
   it("keeps a valid photo ready when pending-key deletion needs later cleanup", async () => {
     // A leftover pending key cannot change the already validated final copy.
     vi.mocked(storage.delete).mockRejectedValue(new Error("S3 unavailable"));
-    await expect(service.completeUpload(pending)).resolves.toMatchObject({
-      contentType: "image/png", width: 2, height: 3,
-    });
+    await expect(service.completeUpload(ownerId, uploadId)).resolves.toEqual({ id: uploadId });
   });
 
-  it("issues a short-lived read URL and deletes a trusted ready photo", async () => {
-    const photo: ReadyPhoto = {
-      id: "photo-id", ownerId: "user-id", objectKey: "photos/photo-id",
-      contentType: "image/png", sizeBytes: png.length, width: 2, height: 3,
-    };
-    await expect(service.createReadUrl(photo)).resolves.toBe("https://s3.example/read");
-    expect(storage.createReadUrl).toHaveBeenCalledWith(photo.objectKey, PHOTO_READ_TTL_SECONDS);
-    await service.deletePhoto(photo);
-    expect(storage.delete).toHaveBeenCalledWith(photo.objectKey);
+  it("issues a short-lived read URL and deletes the owner's profile image", async () => {
+    await expect(service.getProfileImage(ownerId)).resolves.toEqual({ url: "https://s3.example/read" });
+    expect(storage.createReadUrl).toHaveBeenCalledWith(publishKey, PHOTO_READ_TTL_SECONDS);
+    await service.deleteProfileImage(ownerId);
+    expect(storage.delete).toHaveBeenCalledWith(publishKey);
   });
 });

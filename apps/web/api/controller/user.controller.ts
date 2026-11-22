@@ -24,18 +24,16 @@ export class UserController {
     res.set("Cache-Control", "no-store").status(HttpStatus.OK).json({ image });
   }
 
-  async prepareProfileImage(req: Request, res: Response): Promise<void> {
+  async prepareProfileImageUpload(req: Request, res: Response): Promise<void> {
     const input = req.body as { contentType: string; sizeBytes: number };
-    const upload = await uploadService.prepareProfileImage(res.locals.userId as string, input);
-    res.set("Cache-Control", "no-store").status(HttpStatus.CREATED).json(upload);
+    const { pending, target } = await uploadService.prepareUpload(res.locals.userId as string, input);
+    res.set("Cache-Control", "no-store").status(HttpStatus.CREATED).json({ id: pending.id, target });
   }
 
-  async completeProfileImage(req: Request<{ id: string }>, res: Response): Promise<void> {
-    const { uploadToken } = req.body as { uploadToken: string };
-    const result = await uploadService.completeProfileImage(
+  async completeProfileImageUpload(req: Request<{ id: string }>, res: Response): Promise<void> {
+    const result = await uploadService.completeUpload(
       res.locals.userId as string,
       req.params.id,
-      uploadToken,
     );
     res.status(HttpStatus.OK).json(result);
   }

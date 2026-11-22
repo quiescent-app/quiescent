@@ -6,26 +6,33 @@ import { createApp } from "../../app.js";
 import { createAccessToken } from "../../utils/token.utils.js";
 
 const { objects, storage } = vi.hoisted(() => {
-  const objects = new Map<string, Buffer>();
+  const objects = new Map<string, { bytes: Buffer; contentType: string; metadata: Record<string, string> }>();
   return {
     objects,
     storage: {
-      createUploadTarget: vi.fn(async (key: string) => ({
-        url: "https://s3.example", fields: { key },
+      createUploadTarget: vi.fn(async (
+        key: string, contentType: string, _maxSize: number, _ttl: number, metadata: Record<string, string>,
+      ) => ({
+        url: "https://s3.example",
+        fields: {
+          key,
+          "Content-Type": contentType,
+          ...Object.fromEntries(Object.entries(metadata).map(([name, value]) => [`x-amz-meta-${name}`, value])),
+        },
       })),
       inspect: vi.fn(async (key: string) => {
-        const bytes = objects.get(key);
-        return bytes ? { sizeBytes: bytes.length } : null;
+        const object = objects.get(key);
+        return object ? { sizeBytes: object.bytes.length, contentType: object.contentType, metadata: object.metadata } : null;
       }),
       read: vi.fn(async (key: string) => {
-        const bytes = objects.get(key);
-        if (!bytes) throw new Error("Object missing");
-        return bytes;
+        const object = objects.get(key);
+        if (!object) throw new Error("Object missing");
+        return object.bytes;
       }),
       copy: vi.fn(async (from: string, to: string) => {
-        const bytes = objects.get(from);
-        if (!bytes) throw new Error("Object missing");
-        objects.set(to, bytes);
+        const object = objects.get(from);
+        if (!object) throw new Error("Object missing");
+        objects.set(to, object);
       }),
       createReadUrl: vi.fn(async (key: string) => `https://s3.example/${key}`),
       delete: vi.fn(async (key: string) => { objects.delete(key); }),
@@ -64,23 +71,31 @@ describe("profile image routes", () => {
     vi.useRealTimers();
   });
 
-  async function prepare(bytes = png) {
+  async function prepare(bytes = png, sizeBytes = bytes.length) {
     const response = await request(app).post(`${base}/uploads`)
       .set("Authorization", `Bearer ${ownerToken}`)
-      .send({ contentType: "image/png", sizeBytes: bytes.length, ownerId: otherId })
+      .send({ contentType: "image/png", sizeBytes, ownerId: otherId })
       .expect(201);
     const upload = response.body as {
       id: string;
-      uploadToken: string;
-      target: { fields: { key: string } };
+      target: { fields: { key: string; "Content-Type": string; "x-amz-meta-declared-size": string; "x-amz-meta-upload-expires-at": string } };
     };
-    objects.set(upload.target.fields.key, bytes);
+    expect(upload).toEqual({ id: expect.any(String), target: expect.any(Object) });
+    const { fields } = upload.target;
+    objects.set(fields.key, {
+      bytes,
+      contentType: fields["Content-Type"],
+      metadata: {
+        "declared-size": fields["x-amz-meta-declared-size"],
+        "upload-expires-at": fields["x-amz-meta-upload-expires-at"],
+      },
+    });
     return upload;
   }
 
-  function complete(upload: { id: string; uploadToken: string }, token = ownerToken) {
+  function complete(upload: { id: string }, token = ownerToken) {
     return request(app).post(`${base}/uploads/${upload.id}/complete`)
-      .set("Authorization", `Bearer ${token}`).send({ uploadToken: upload.uploadToken });
+      .set("Authorization", `Bearer ${token}`);
   }
 
   function image(method: "get" | "delete", token = ownerToken) {
@@ -94,16 +109,17 @@ describe("profile image routes", () => {
     await request(app).delete(base).expect(401);
 
     const upload = await prepare();
-    await image("get", upload.uploadToken).expect(401);
-    await complete({ ...upload, uploadToken: ownerToken }).expect(404);
+    await complete(upload, "invalid-access-token").expect(401);
     await complete(upload, otherToken).expect(404);
-    await complete({ ...upload, id: otherId }).expect(404);
+    await complete({ id: otherId }).expect(404);
+    await complete({ id: "%2e%2e%2fvalidated%2fother-file" }).expect(404);
     expect(storage.copy).not.toHaveBeenCalled();
   });
 
   it("validates a private copy and publishes, reads, replaces, and removes the owner's image", async () => {
     await image("get").expect(200, { image: null });
     const upload = await prepare();
+    expect(upload.target.fields.key).toBe(`pending/profile/${ownerId}/${upload.id}`);
     await complete(upload).expect(200, { id: upload.id });
     const stagedKey = storage.copy.mock.calls[0]?.[1];
     expect(stagedKey).toMatch(/^pending\/validated\//);
@@ -115,28 +131,31 @@ describe("profile image routes", () => {
       .expect(200, { image: { url: `https://s3.example/${currentKey}` } });
     await image("get", otherToken).expect(200, { image: null });
     await image("delete", otherToken).expect(204);
-    expect(objects.get(currentKey)).toEqual(png);
+    expect(objects.get(currentKey)?.bytes).toEqual(png);
 
     const replacement = await sharp(png).negate().png().toBuffer();
     const next = await prepare(replacement);
     await complete(next).expect(200, { id: next.id });
-    expect(objects.get(currentKey)).toEqual(replacement);
+    expect(objects.get(currentKey)?.bytes).toEqual(replacement);
 
     await image("delete").expect(204);
     await image("get").expect(200, { image: null });
   });
 
-  it("keeps the current image when a replacement is invalid or its ticket expires", async () => {
+  it("keeps the current image when a replacement is invalid, mismatched, or expired", async () => {
     const original = await prepare();
     await complete(original).expect(200);
     const invalid = await prepare(Buffer.alloc(png.length));
     await complete(invalid).expect(400);
-    expect(objects.get(currentKey)).toEqual(png);
+    expect(objects.get(currentKey)?.bytes).toEqual(png);
+
+    const mismatched = await prepare(png, png.length + 1);
+    await complete(mismatched).expect(400);
 
     vi.useFakeTimers({ toFake: ["Date"] });
     const expired = await prepare();
     vi.setSystemTime(Date.now() + 301_000);
     await complete(expired).expect(404);
-    expect(objects.get(currentKey)).toEqual(png);
+    expect(objects.get(currentKey)?.bytes).toEqual(png);
   });
 });
