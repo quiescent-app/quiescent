@@ -6,7 +6,7 @@ import sharp from "sharp";
 
 import { AppError, HttpStatus } from "../errors/appError.js";
 import { getJwtSecret } from "../utils/token.utils.js";
-import { createS3PhotoStorage } from "./s3-photo.storage.js";
+import { createS3Storage, type S3Storage } from "../storage/s3.storage.js";
 
 export const PHOTO_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const PHOTO_UPLOAD_TTL_SECONDS = 300;
@@ -26,30 +26,6 @@ export interface UploadTarget {
   url: string;
   fields: Record<string, string>;
   expiresAt: Date;
-}
-
-export interface StoredObject {
-  sizeBytes: number;
-}
-
-export interface PhotoStorage {
-  /** Issue a temporary form that can upload only to the generated pending key. */
-  createUploadTarget(
-    key: string,
-    contentType: PhotoContentType,
-    maxSizeBytes: number,
-    expiresInSeconds: number,
-  ): Promise<Omit<UploadTarget, "expiresAt">>;
-  /** Return the object's current size, or null when it does not exist. */
-  inspect(key: string): Promise<StoredObject | null>;
-  /** Read at most maxBytes for server-side image validation. */
-  read(key: string, maxBytes: number): Promise<Buffer>;
-  /** Copy uploaded bytes to a separate key that the upload form cannot overwrite. */
-  copy(sourceKey: string, destinationKey: string): Promise<void>;
-  /** Issue a temporary URL for reading a validated photo. */
-  createReadUrl(key: string, expiresInSeconds: number): Promise<string>;
-  /** Remove an object; callers decide when deletion is safe. */
-  delete(key: string): Promise<void>;
 }
 
 // These records must come from trusted server code or a verified upload ticket.
@@ -73,7 +49,7 @@ export interface ReadyPhoto {
 }
 
 export class UploadService {
-  private storage: PhotoStorage | undefined;
+  private storage: S3Storage | undefined;
 
   async prepareProfileImage(ownerId: string, input: { contentType: string; sizeBytes: number }) {
     const { pending, target } = await this.prepareUpload(ownerId, input);
@@ -231,7 +207,7 @@ export class UploadService {
     await this.getStorage().delete(photo.objectKey);
   }
 
-  private getStorage(): PhotoStorage {
+  private getStorage(): S3Storage {
     this.storage ??= createPhotoStorage();
     return this.storage;
   }
@@ -253,13 +229,13 @@ function profileImageObjectKey(ownerId: string): string {
 }
 
 /** Configure the directly imported S3 adapter for this backend environment. */
-function createPhotoStorage(): PhotoStorage {
+function createPhotoStorage(): S3Storage {
   const region = process.env["AWS_REGION"];
   const bucket = process.env["S3_PHOTO_BUCKET"];
   if (!region || !bucket) {
     throw new Error("AWS_REGION and S3_PHOTO_BUCKET are required for photo storage");
   }
-  return createS3PhotoStorage(new S3Client({ region }), bucket);
+  return createS3Storage(new S3Client({ region }), bucket);
 }
 
 /** Decode the full image and confirm its type, dimensions, and single-frame policy. */

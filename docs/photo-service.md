@@ -3,7 +3,9 @@
 The user routes call `UploadService` through the existing user controller. The
 service uses the authenticated account ID to select the current image's private
 S3 key. A signed, five-minute upload ticket binds an upload ID, owner, size,
-and content type. The ticket uses a separate signing key derived from
+and content type. The shared S3 adapter in `apps/web/api/storage/s3.storage.ts`
+accepts a caller-supplied MIME type. `UploadService` enforces the photo policy.
+The ticket uses a separate signing key derived from
 `JWT_SECRET`. Profile image uploads use S3 for state and bytes.
 
 ## Web API

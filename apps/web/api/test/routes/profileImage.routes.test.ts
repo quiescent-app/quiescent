@@ -33,8 +33,8 @@ const { objects, storage } = vi.hoisted(() => {
   };
 });
 
-vi.mock("../../service/s3-photo.storage.js", () => ({
-  createS3PhotoStorage: () => storage,
+vi.mock("../../storage/s3.storage.js", () => ({
+  createS3Storage: () => storage,
 }));
 
 describe("profile image routes", () => {
