@@ -74,8 +74,11 @@ describe("Account profile saving", () => {
       const path = new URL(String(input)).pathname;
       if (path.endsWith("/profile-image/uploads")) {
         return Response.json({
-          id: "upload-id", uploadToken: "upload-ticket",
-          target: { url: uploadUrl, fields: { key: "pending/id", policy: "signed-policy" } },
+          id: "upload-id",
+          target: {
+            url: uploadUrl,
+            fields: { key: "pending/id", policy: "signed-policy", "x-amz-meta-declared-size": "10" },
+          },
         }, { status: 201 });
       }
       if (path.endsWith("/profile-image/uploads/upload-id/complete")) {
@@ -133,10 +136,12 @@ describe("Account profile saving", () => {
     const upload = fetchMock.mock.calls.find(([url]) => url === uploadUrl)?.[1];
     expect(upload).toMatchObject({ method: "POST", credentials: "omit" });
     expect(upload?.headers).toBeUndefined();
-    expect(Array.from((upload?.body as FormData).keys())).toEqual(["key", "policy", "file"]);
+    expect(Array.from((upload?.body as FormData).keys())).toEqual(["key", "policy", "x-amz-meta-declared-size", "file"]);
+    expect((upload?.body as FormData).get("x-amz-meta-declared-size")).toBe(String(photo.size));
     expect((upload?.body as FormData).get("file")).toBe(photo);
     const completion = fetchMock.mock.calls.find(([url]) => String(url).endsWith("/complete"));
-    expect(completion?.[1]?.body).toBe(JSON.stringify({ uploadToken: "upload-ticket" }));
+    expect(completion?.[1]).toMatchObject({ method: "POST" });
+    expect(completion?.[1]?.body).toBeUndefined();
   });
 
   it("keeps the selected photo for retry when the name saves and the upload fails", async () => {

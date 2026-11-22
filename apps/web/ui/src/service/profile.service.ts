@@ -13,7 +13,6 @@ const profileImagePath = "users/me/profile-image";
 
 interface ProfileImageUpload {
   id: string;
-  uploadToken: string;
   target: {
     url: string;
     fields: Record<string, string>;
@@ -26,7 +25,7 @@ export async function getProfileImage(signal?: AbortSignal): Promise<{ url: stri
 }
 
 export async function uploadProfileImage(file: File): Promise<void> {
-  const { id, uploadToken, target } = await apiRequest<ProfileImageUpload>(`${profileImagePath}/uploads`, {
+  const { id, target } = await apiRequest<ProfileImageUpload>(`${profileImagePath}/uploads`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
@@ -43,8 +42,6 @@ export async function uploadProfileImage(file: File): Promise<void> {
 
   await apiRequest(`${profileImagePath}/uploads/${encodeURIComponent(id)}/complete`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ uploadToken }),
   });
 }
 
