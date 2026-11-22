@@ -1,37 +1,36 @@
-# Photo storage service boundary
+# Profile image uploads
 
-`UploadService` in `apps/web/api/service/upload.service.ts` handles photo policy and
-validation. `S3PhotoStorage` in `service/s3-photo.storage.ts` implements its
-`PhotoStorage` interface. The service currently has no route or database wiring.
+The user routes call `UploadService` through the existing user controller. The
+service uses the authenticated account ID to select the current image's private
+S3 key. A signed, five-minute upload ticket binds an upload ID, owner, size,
+and content type. The ticket uses a separate signing key derived from
+`JWT_SECRET`. Profile image uploads use S3 for state and bytes.
 
-`UploadService` constructs its S3 adapter directly from `AWS_REGION` and
-`S3_PHOTO_BUCKET`. The AWS SDK uses the backend process's credentials. Browser
-code receives a temporary upload form, including its generated pending key,
-but must not choose a key or receive AWS credentials.
+## Web API
 
-## Service flow
+All requests to the API require the account's Bearer access token.
 
-1. `prepareUpload(ownerId, { contentType, sizeBytes })` checks the declared policy,
-   generates a pending key, and returns a presigned POST target plus a
-   `PendingPhotoUpload` record. The future persistence layer must save that record
-   before returning the target to a client.
-2. A browser submits the file and returned form fields directly to S3. The form
-   expires after five minutes and limits the upload to 10 MiB.
-3. The future persistence layer loads the pending record, checks ownership and
-   state, and passes it to `completeUpload`. The service checks the S3 size,
-   copies the object to a new final key, then decodes and validates the **copied**
-   JPEG, PNG, or WebP bytes. It returns a `ReadyPhoto` record for persistence.
-4. `createReadUrl` and `deletePhoto` accept only ready records loaded and
-   authorized by server code.
+| Request | Result |
+| --- | --- |
+| `POST /users/me/profile-image/uploads` | Send `{contentType, sizeBytes}`. Returns `201` with `{id, uploadToken, target: {url, fields, expiresAt}}`. |
+| `POST /users/me/profile-image/uploads/:id/complete` | Send `{uploadToken}` from the prepare response. Returns `200` with `{id}` after validation and publication. |
+| `GET /users/me/profile-image` | Returns `{image: null}` or `{image: {url}}`. The private read URL expires after five minutes. |
+| `DELETE /users/me/profile-image` | Removes the current image and returns `204`. |
 
-The service rejects images above 16,777,216 decoded pixels and animated or
-multi-page images. It does not resize or transform accepted files.
+Append the form fields to `FormData`, append the file last as `file`, and POST
+to the returned S3 URL. Call the completion endpoint after the S3 upload
+succeeds. Invalid, expired, and differently owned upload tickets return
+`404`.
 
-## Required integration work
+The API accepts JPEG, PNG, and WebP images up to 10 MiB. The previous image
+stays current until the verified replacement is copied to the owner's S3 key.
+The validation copy is separate from the browser's writable key. Concurrent
+successful replacements use the last completed S3 copy.
 
-`PendingPhotoUpload` and `ReadyPhoto` are trusted server-side records, not API
-request shapes. Persistence must claim completion atomically, make repeat calls
-idempotent, and authorize reads and deletion. It must also retain enough state to
-remove a final object if saving `ReadyPhoto` fails, and retry deletion of
-abandoned pending or final objects. Until those pieces exist, this service is
-not an end-to-end upload feature.
+## Storage configuration
+
+Set `AWS_REGION` and `S3_PHOTO_BUCKET` in the API environment. Use a private
+bucket with browser CORS that allows POST from the web origin, and an S3
+lifecycle expiration rule on `pending/` for abandoned uploads and validation
+copies. The upload form can be reused until expiration, so the lifecycle rule
+also removes any pending object recreated after completion.
