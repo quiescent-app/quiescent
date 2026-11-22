@@ -1,15 +1,18 @@
-import { randomUUID } from "node:crypto";
+import { createHmac, randomUUID } from "node:crypto";
 
 import { S3Client } from "@aws-sdk/client-s3";
+import { jwtVerify, SignJWT } from "jose";
 import sharp from "sharp";
 
 import { AppError, HttpStatus } from "../errors/appError.js";
+import { getJwtSecret } from "../utils/token.utils.js";
 import { createS3PhotoStorage } from "./s3-photo.storage.js";
 
 export const PHOTO_MAX_SIZE_BYTES = 10 * 1024 * 1024;
 export const PHOTO_UPLOAD_TTL_SECONDS = 300;
 export const PHOTO_READ_TTL_SECONDS = 300;
 const PHOTO_MAX_PIXELS = 16_777_216;
+const PROFILE_IMAGE_UPLOAD_AUDIENCE = "quiescent:profile-image-upload";
 
 export type PhotoContentType = "image/jpeg" | "image/png" | "image/webp";
 
@@ -49,8 +52,7 @@ export interface PhotoStorage {
   delete(key: string): Promise<void>;
 }
 
-// These records must be persisted and loaded by trusted server code in a later stage.
-// A caller must never construct one from a client-supplied key or owner ID.
+// These records must come from trusted server code or a verified upload ticket.
 export interface PendingPhotoUpload {
   id: string;
   ownerId: string;
@@ -73,6 +75,62 @@ export interface ReadyPhoto {
 export class UploadService {
   private storage: PhotoStorage | undefined;
 
+  async prepareProfileImage(ownerId: string, input: { contentType: string; sizeBytes: number }) {
+    const { pending, target } = await this.prepareUpload(ownerId, input);
+    const uploadToken = await new SignJWT({
+      contentType: pending.contentType,
+      sizeBytes: pending.declaredSizeBytes,
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setAudience(PROFILE_IMAGE_UPLOAD_AUDIENCE)
+      .setSubject(ownerId)
+      .setJti(pending.id)
+      .setExpirationTime(Math.floor(pending.expiresAt.getTime() / 1000))
+      .sign(profileImageUploadKey());
+
+    return { id: pending.id, uploadToken, target };
+  }
+
+  async completeProfileImage(ownerId: string, id: string, uploadToken: string) {
+    const result = await jwtVerify(uploadToken, profileImageUploadKey(), {
+      algorithms: ["HS256"],
+      audience: PROFILE_IMAGE_UPLOAD_AUDIENCE,
+      subject: ownerId,
+      requiredClaims: ["exp", "jti"],
+    }).catch(() => null);
+    const payload = result?.payload;
+    if (
+      !payload || payload.jti !== id || typeof payload.exp !== "number" ||
+      !isPhotoContentType(payload["contentType"]) || typeof payload["sizeBytes"] !== "number"
+    ) {
+      throw new AppError(HttpStatus.NOT_FOUND, "Photo upload not found or expired");
+    }
+
+    await this.completeUpload({
+      id,
+      ownerId,
+      pendingKey: `pending/${id}`,
+      contentType: payload["contentType"],
+      declaredSizeBytes: payload["sizeBytes"],
+      expiresAt: new Date(payload.exp * 1000),
+    }, profileImageObjectKey(ownerId));
+
+    return { id };
+  }
+
+  async getProfileImage(ownerId: string) {
+    const storage = this.getStorage();
+    const key = profileImageObjectKey(ownerId);
+    if (!await storage.inspect(key)) return null;
+
+    const url = await storage.createReadUrl(key, PHOTO_READ_TTL_SECONDS);
+    return { url };
+  }
+
+  async deleteProfileImage(ownerId: string): Promise<void> {
+    await this.getStorage().delete(profileImageObjectKey(ownerId));
+  }
+
   /** Validate the declared upload and create its pending record and S3 form. */
   async prepareUpload(
     ownerId: string,
@@ -80,7 +138,7 @@ export class UploadService {
   ): Promise<{ pending: PendingPhotoUpload; target: UploadTarget }> {
     const storage = this.getStorage();
     if (!ownerId) throw new AppError(HttpStatus.BAD_REQUEST, "Photo owner is required");
-    if (!contentTypes.has(input.contentType)) {
+    if (!isPhotoContentType(input.contentType)) {
       throw new AppError(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Unsupported photo type");
     }
     if (
@@ -93,7 +151,7 @@ export class UploadService {
 
     const id = randomUUID();
     const pendingKey = `pending/${id}`;
-    const contentType = input.contentType as PhotoContentType;
+    const contentType = input.contentType;
     const expiresAt = new Date(Date.now() + PHOTO_UPLOAD_TTL_SECONDS * 1000);
     const target = await storage.createUploadTarget(
       pendingKey,
@@ -109,7 +167,7 @@ export class UploadService {
   }
 
   /** Validate a trusted pending upload and return metadata for its final copy. */
-  async completeUpload(pending: PendingPhotoUpload): Promise<ReadyPhoto> {
+  async completeUpload(pending: PendingPhotoUpload, publishKey?: string): Promise<ReadyPhoto> {
     const storage = this.getStorage();
     if (pending.expiresAt.getTime() <= Date.now()) {
       throw new AppError(HttpStatus.BAD_REQUEST, "Photo upload has expired");
@@ -122,7 +180,7 @@ export class UploadService {
     }
 
     const id = randomUUID();
-    const objectKey = `photos/${id}`;
+    const objectKey = publishKey ? `pending/validated/${id}` : `photos/${id}`;
     await storage.copy(pending.pendingKey, objectKey);
 
     try {
@@ -136,18 +194,19 @@ export class UploadService {
       }
       const dimensions = await validateImage(bytes, pending.contentType);
 
-      // A failure to remove the pending object is safe: a later cleanup pass
-      // can remove it without changing the immutable final object.
-      try {
-        await storage.delete(pending.pendingKey);
-      } catch {
-        // Deferred cleanup is the responsibility of the future persistence layer.
+      if (publishKey) {
+        // Only publish the copy that was validated. The browser can still write to its pending key.
+        await storage.copy(objectKey, publishKey);
+        await storage.delete(objectKey).catch(() => undefined);
       }
+
+      // Bucket lifecycle expiration removes temporary objects when deletion fails.
+      await storage.delete(pending.pendingKey).catch(() => undefined);
 
       return {
         id,
         ownerId: pending.ownerId,
-        objectKey,
+        objectKey: publishKey ?? objectKey,
         contentType: pending.contentType,
         sizeBytes: final.sizeBytes,
         ...dimensions,
@@ -179,6 +238,19 @@ export class UploadService {
 }
 
 export const uploadService = new UploadService();
+
+function isPhotoContentType(value: unknown): value is PhotoContentType {
+  return typeof value === "string" && contentTypes.has(value);
+}
+
+function profileImageUploadKey(): Buffer {
+  // Use a different signing key so an upload ticket cannot act as an access token.
+  return createHmac("sha256", getJwtSecret()).update(PROFILE_IMAGE_UPLOAD_AUDIENCE).digest();
+}
+
+function profileImageObjectKey(ownerId: string): string {
+  return `photos/profile/${encodeURIComponent(ownerId)}`;
+}
 
 /** Configure the directly imported S3 adapter for this backend environment. */
 function createPhotoStorage(): PhotoStorage {
