@@ -16,6 +16,10 @@ const { userControllerMock } = vi.hoisted(() => {
     userControllerMock: {
       getProfile: vi.fn<RequestHandler>(respond(200)),
       updateProfile: vi.fn<RequestHandler>(respond(200)),
+      getProfileImage: vi.fn<RequestHandler>(respond(200)),
+      prepareProfileImage: vi.fn<RequestHandler>(respond(201)),
+      completeProfileImage: vi.fn<RequestHandler>(respond(200)),
+      deleteProfileImage: vi.fn<RequestHandler>(respond(204)),
     },
   };
 });
