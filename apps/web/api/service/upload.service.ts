@@ -132,6 +132,7 @@ export class UploadService {
       await storage.delete(pendingKey).catch(() => undefined);
     } catch (error) {
       try {
+        // Attempt to clean up the staged photo if an error occurred.
         await storage.delete(stagedKey);
       } catch {
         throw new AppError(HttpStatus.INTERNAL_SERVER_ERROR, "Photo storage failed");
