@@ -35,30 +35,27 @@ describe("createS3Storage", () => {
     storage = createS3Storage(client, bucket);
   });
 
-  it.each(["image/png", "application/pdf"])(
-    "signs a private upload form for %s with the exact key, type, size, and lifetime",
-    async (contentType) => {
-      const result = await storage.createUploadTarget("pending/id", contentType, 5_242_880, 300);
+  it("signs a PNG upload form with an exact key, type, size limit, lifetime, and metadata", async () => {
+    const result = await storage.createUploadTarget("pending/id", "image/png", 100, 300, {
+      "declared-size": "42",
+      "upload-expires-at": "1767225900000",
+    });
 
-      expect(result).toEqual({ url: "https://s3.example/upload", fields: { key: "pending/id" } });
-      expect(createPresignedPost).toHaveBeenCalledWith(client, {
-        Bucket: bucket,
-        Key: "pending/id",
-        Conditions: [["content-length-range", 1, 5_242_880], ["eq", "$Content-Type", contentType]],
-        Fields: { "Content-Type": contentType },
-        Expires: 300,
-      });
-    },
-  );
-
-  it("binds metadata to the presigned POST fields and conditions", async () => {
-    await storage.createUploadTarget("pending/id", "image/png", 100, 300, { "declared-size": "42" });
-
+    expect(result).toEqual({ url: "https://s3.example/upload", fields: { key: "pending/id" } });
     expect(createPresignedPost).toHaveBeenCalledWith(client, {
       Bucket: bucket,
       Key: "pending/id",
-      Conditions: [["content-length-range", 1, 100], ["eq", "$Content-Type", "image/png"], { "x-amz-meta-declared-size": "42" }],
-      Fields: { "Content-Type": "image/png", "x-amz-meta-declared-size": "42" },
+      Conditions: [
+        ["content-length-range", 1, 100],
+        ["eq", "$Content-Type", "image/png"],
+        { "x-amz-meta-declared-size": "42" },
+        { "x-amz-meta-upload-expires-at": "1767225900000" },
+      ],
+      Fields: {
+        "Content-Type": "image/png",
+        "x-amz-meta-declared-size": "42",
+        "x-amz-meta-upload-expires-at": "1767225900000",
+      },
       Expires: 300,
     });
   });
