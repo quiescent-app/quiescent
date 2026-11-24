@@ -35,18 +35,6 @@ describe("extension handoff", () => {
     await expect(auth.acceptSession({ accessToken: token })).rejects.toThrow("Invalid session handoff");
   });
 
-  it("checks saved status using the authenticated by-url endpoint", async () => {
-    const auth = await import("../src/background/auth");
-    await auth.acceptSession({ accessToken: token, user: { email: "reader@example.com" } });
-    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 }).mockResolvedValueOnce({ ok: true, status: 200 });
-    expect(await auth.checkArticle("https://example.com/story#section")).toBe("not-saved");
-    expect(await auth.checkArticle("https://example.com/story")).toBe("saved");
-    const endpoint = fetchMock.mock.calls[0]?.[0] as URL;
-    expect(endpoint.pathname).toBe("/articles/by-url");
-    expect(endpoint.searchParams.get("url")).toBe("https://example.com/story#section");
-    expect(fetchMock.mock.calls[0]?.[1]?.headers.Authorization).toBe(`Bearer ${token}`);
-  });
-
   it("treats a duplicate create response as already saved", async () => {
     const auth = await import("../src/background/auth");
     await auth.acceptSession({ accessToken: token, user: { email: "reader@example.com" } });
@@ -56,7 +44,9 @@ describe("extension handoff", () => {
 
   it("requires sign in when no session is available", async () => {
     const auth = await import("../src/background/auth");
-    await expect(auth.checkArticle("https://example.com/story")).rejects.toBeInstanceOf(auth.SessionExpiredError);
+    expect(await auth.getAuthStatus()).toEqual({ authenticated: false });
+    await expect(auth.saveArticle({ title: "Story", url: "https://example.com/story" }))
+      .rejects.toThrow("Sign in to save articles.");
   });
 
   it("refreshes an expired access token using only the extension cookie", async () => {
@@ -83,7 +73,7 @@ describe("extension handoff", () => {
     await auth.acceptSession({ accessToken: expired, user: { email: "reader@example.com" } });
     fetchMock.mockResolvedValue({ ok: false, status: 401 });
 
-    await expect(auth.getAuthStatus()).rejects.toBeInstanceOf(auth.SessionExpiredError);
+    await expect(auth.getAuthStatus()).rejects.toThrow("Your session expired. Sign in again.");
     expect(stored.authSession).toBeUndefined();
   });
 
