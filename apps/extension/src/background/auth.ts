@@ -2,7 +2,6 @@
 
 type Session = {
   accessToken: string;
-  refreshToken: string;
   email: string;
 };
 
@@ -32,8 +31,10 @@ async function readSession(): Promise<Session | null> {
   const result = await chrome.storage.local.get(SESSION_KEY);
   const value = result[SESSION_KEY] as Partial<Session> | undefined;
   if (!value || typeof value.accessToken !== "string" ||
-    typeof value.refreshToken !== "string" || typeof value.email !== "string") return null;
-  return value as Session;
+    typeof value.email !== "string") return null;
+  const session = { accessToken: value.accessToken, email: value.email };
+  if ("refreshToken" in value) await writeSession(session);
+  return session;
 }
 
 async function writeSession(session: Session | null): Promise<void> {
@@ -57,21 +58,20 @@ async function errorMessage(response: Response): Promise<string> {
 }
 
 function parseTokens(body: unknown, email: string): Session {
-  const result = body as { accessToken?: unknown; refreshToken?: unknown };
-  if (typeof result?.accessToken !== "string" || typeof result?.refreshToken !== "string") {
+  const result = body as { accessToken?: unknown };
+  if (typeof result?.accessToken !== "string") {
     throw new Error("Invalid authentication response.");
   }
-  return { accessToken: result.accessToken, refreshToken: result.refreshToken, email };
+  return { accessToken: result.accessToken, email };
 }
 
 async function refresh(session: Session): Promise<Session> {
   if (refreshPromise) return refreshPromise;
   const version = generation;
   refreshPromise = (async () => {
-    const response = await fetch(new URL("/auth/refresh", apiOrigin()), {
+    const response = await fetch(new URL("/auth/extension-refresh", apiOrigin()), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: session.refreshToken }),
+      credentials: "include",
     });
     if (response.status === 401) {
       if (version === generation) await writeSession(null);
@@ -103,11 +103,11 @@ export async function getAuthStatus(): Promise<AuthStatus> {
 }
 
 export async function acceptSession(input: unknown): Promise<AuthStatus> {
-  const value = input as { accessToken?: unknown; refreshToken?: unknown; user?: { email?: unknown } };
-  if (typeof value?.accessToken !== "string" || typeof value.refreshToken !== "string" || typeof value.user?.email !== "string") {
+  const value = input as { accessToken?: unknown; user?: { email?: unknown } };
+  if (typeof value?.accessToken !== "string" || typeof value.user?.email !== "string") {
     throw new Error("Invalid session handoff.");
   }
-  await writeSession({ accessToken: value.accessToken, refreshToken: value.refreshToken, email: value.user.email });
+  await writeSession({ accessToken: value.accessToken, email: value.user.email });
   return { authenticated: true, email: value.user.email };
 }
 

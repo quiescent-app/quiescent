@@ -27,4 +27,21 @@ describe("CORS middleware", () => {
     expect(response.status).toBe(HttpStatus.FORBIDDEN);
     expect(response.headers["access-control-allow-origin"]).toBeUndefined();
   });
+
+  it("allows a credentialed extension refresh preflight only on its endpoint", async () => {
+    const origin = `chrome-extension://${"a".repeat(32)}`;
+    const allowed = await request(createApp())
+      .options("/auth/extension-refresh")
+      .set("Origin", origin)
+      .set("Access-Control-Request-Method", "POST");
+    const denied = await request(createApp())
+      .options("/auth/refresh")
+      .set("Origin", origin)
+      .set("Access-Control-Request-Method", "POST");
+
+    expect(allowed.status).toBe(HttpStatus.NO_CONTENT);
+    expect(allowed.headers["access-control-allow-origin"]).toBe(origin);
+    expect(allowed.headers["access-control-allow-credentials"]).toBe("true");
+    expect(denied.status).toBe(HttpStatus.FORBIDDEN);
+  });
 });

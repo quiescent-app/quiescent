@@ -1,13 +1,39 @@
+import { apiUrl } from "@/api/http";
+import { refreshSession } from "@/service/auth.service";
+import { accessToken } from "./tokenStore";
+
+type ExtensionRuntime = {
+  sendMessage: (
+    extensionId: string,
+    message: unknown,
+    callback: (reply: { ok?: boolean }) => void,
+  ) => void;
+  lastError?: { message: string };
+};
+
+type ExtensionTokens = {
+  accessToken: string;
+  user: { email: string };
+};
+
 export async function connectExtension(extensionId: string): Promise<void> {
-  if (!/^[a-p]{32}$/.test(extensionId)) throw new Error("Invalid extension ID.");
-  const chromeRuntime = (window as Window & { chrome?: { runtime?: { sendMessage: (id: string, message: unknown, callback: (reply: { ok?: boolean }) => void) => void; lastError?: { message: string } } } }).chrome?.runtime;
-  if (!chromeRuntime?.sendMessage) throw new Error("Open this page in Chrome with Quiescent installed.");
-  const raw = localStorage.getItem("quiescent.auth");
-  if (!raw) throw new Error("Sign in first.");
-  const session = JSON.parse(raw) as { accessToken: string; refreshToken: string; user: { email: string } };
-  const api = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000";
-  const exchange = (accessToken: string) => fetch(new URL("/auth/extension-session", api), {
-    method: "POST", headers: { Authorization: `Bearer ${accessToken}` },
+  if (!/^[a-p]{32}$/.test(extensionId)) {
+    throw new Error("Invalid extension ID.");
+  }
+
+  const chromeRuntime = (window as Window & {
+    chrome?: { runtime?: ExtensionRuntime };
+  }).chrome?.runtime;
+
+  if (!chromeRuntime?.sendMessage) {
+    throw new Error("Open this page in Chrome with Quiescent installed.");
+  }
+
+  const exchange = (token: string) => fetch(apiUrl("auth/extension-session"), {
+    method: "POST",
+    credentials: "include",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ extensionId }),
   });
   let response = await exchange(session.accessToken);
   if (response.status === 401) {

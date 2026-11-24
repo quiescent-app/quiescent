@@ -3,7 +3,10 @@ import type { RequestHandler } from "express";
 import { AppError, HttpStatus } from "../errors/appError.js";
 import { authService } from "../service/auth.service.js";
 import {
+  getClearExtensionRefreshCookieOptions,
   getClearRefreshCookieOptions,
+  getExtensionRefreshCookieName,
+  getExtensionRefreshCookieOptions,
   getRefreshCookieOptions,
   REFRESH_COOKIE_NAME,
 } from "../utils/cookie.utils.js";
@@ -46,8 +49,26 @@ export class AuthController {
     res.status(HttpStatus.NO_CONTENT).end();
   };
 
-  readonly extensionSession: RequestHandler = async (_req, res) => {
-    res.status(HttpStatus.OK).json(await authService.createExtensionSession(res.locals.userId));
+  readonly extensionSession: RequestHandler = async (req, res) => {
+    const result = await authService.createExtensionSession(res.locals.userId);
+    const { extensionId } = req.body as { extensionId: string };
+    res.cookie(getExtensionRefreshCookieName(extensionId), result.refreshToken, getExtensionRefreshCookieOptions());
+    res.status(HttpStatus.OK).json({ user: result.user, accessToken: result.accessToken });
+  };
+
+  readonly extensionRefresh: RequestHandler = async (req, res) => {
+    const { refreshToken } = req.body as { refreshToken: string };
+    const cookieName = getExtensionRefreshCookieName(res.locals.extensionId);
+    try {
+      const result = await authService.refresh(refreshToken);
+      res.cookie(cookieName, result.refreshToken, getExtensionRefreshCookieOptions());
+      res.status(HttpStatus.OK).json({ user: result.user, accessToken: result.accessToken });
+    } catch (error) {
+      if (error instanceof AppError && error.statusCode === HttpStatus.UNAUTHORIZED) {
+        res.clearCookie(cookieName, getClearExtensionRefreshCookieOptions());
+      }
+      throw error;
+    }
   };
 }
 
