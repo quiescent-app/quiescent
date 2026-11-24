@@ -35,21 +35,34 @@ export async function connectExtension(extensionId: string): Promise<void> {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: JSON.stringify({ extensionId }),
   });
-  let response = await exchange(session.accessToken);
-  if (response.status === 401) {
-    const renewed = await fetch(new URL("/auth/refresh", api), {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken: session.refreshToken }),
-    });
-    if (!renewed.ok) throw new Error("Your session expired. Sign in again.");
-    const next = await renewed.json() as typeof session;
-    localStorage.setItem("quiescent.auth", JSON.stringify(next));
-    response = await exchange(next.accessToken);
+  let token = accessToken;
+  if (!token) {
+    token = (await refreshSession())?.accessToken ?? null;
   }
-  if (!response.ok) throw new Error("Could not connect the extension. Sign in again.");
-  const tokens = await response.json() as { accessToken: string; refreshToken: string; user: { email: string } };
-  await new Promise<void>((resolve, reject) => chromeRuntime.sendMessage(extensionId, { type: "EXTENSION_SESSION", tokens }, (reply) => {
-    if (chromeRuntime.lastError || !reply?.ok) reject(new Error("Could not connect the extension."));
-    else resolve();
-  }));
+  if (!token) {
+    throw new Error("Sign in first.");
+  }
+
+  let response = await exchange(token);
+  if (response.status === 401) {
+    const renewed = await refreshSession();
+    if (!renewed) {
+      throw new Error("Your session expired. Sign in again.");
+    }
+    response = await exchange(renewed.accessToken);
+  }
+  if (!response.ok) {
+    throw new Error("Could not connect the extension. Try again.");
+  }
+
+  const tokens = await response.json() as ExtensionTokens;
+  await new Promise<void>((resolve, reject) => {
+    chromeRuntime.sendMessage(extensionId, { type: "EXTENSION_SESSION", tokens }, (reply) => {
+      if (chromeRuntime.lastError || !reply?.ok) {
+        reject(new Error("Could not connect the extension."));
+      } else {
+        resolve();
+      }
+    });
+  });
 }

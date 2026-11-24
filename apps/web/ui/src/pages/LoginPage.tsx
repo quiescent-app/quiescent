@@ -2,15 +2,17 @@ import { useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { useAuth } from "@/auth/useAuth";
+import ExtensionConnection from "@/auth/ExtensionConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type ReturnLocation = { pathname?: string; search?: string; hash?: string };
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login, status } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const extensionId = new URLSearchParams(location.search).get("extensionId");
   const returnTo = (location.state as { from?: ReturnLocation } | null)?.from;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,12 +28,16 @@ export default function LoginPage() {
       const destination = returnTo?.pathname 
         ? returnTo.pathname + (returnTo.search ?? "") + (returnTo.hash ?? "")
         : "/library";
-      navigate(destination, { replace: true });
+      if (!extensionId) navigate(destination, { replace: true });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Sign in failed. Try again.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (status === "authenticated" && extensionId) {
+    return <ExtensionConnection extensionId={extensionId} key={extensionId} />;
   }
 
   return (
@@ -85,7 +91,7 @@ export default function LoginPage() {
           </form>
 
           <p className="auth-switch">
-            New to Quiescent? <Link to="/signup">Create an account</Link>
+            New to Quiescent? <Link to={{ pathname: "/signup", search: location.search }}>Create an account</Link>
           </p>
         </section>
       </div>
