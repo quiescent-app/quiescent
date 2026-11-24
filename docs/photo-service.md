@@ -1,40 +1,87 @@
-# Photo storage service boundary
+# Profile image uploads
 
-`UploadService` in `apps/web/api/service/upload.service.ts` handles photo policy and
-validation. `S3PhotoStorage` in `service/s3-photo.storage.ts` implements its
-`PhotoStorage` interface. The service currently has no route or database wiring.
+Adding or replacing a profile image takes two steps.
 
-`UploadService` constructs its S3 adapter directly from `AWS_REGION` and
-`S3_PHOTO_BUCKET`. The AWS SDK uses the backend process's credentials. Browser
-code receives a temporary upload form, including its generated pending key,
-but must not choose a key or receive AWS credentials.
+1. **[Prepare the upload](#prepare-the-upload).** The API returns an upload ID
+   and a presigned S3 form. The client uses the form's URL and fields to send
+   the image directly to S3.
+2. **[Complete the upload](#complete-the-upload).** The client sends the upload
+   ID from step 1 to the API. The API verifies the uploaded image and makes it
+   the user's current profile image.
 
-## Service flow
+## How prepare and complete work
 
-1. `prepareUpload(ownerId, { contentType, sizeBytes })` checks the declared policy,
-   generates a pending key, and returns a presigned POST target plus a
-   `PendingPhotoUpload` record. The future persistence layer must save that record
-   before returning the target to a client.
-2. A browser submits the file and returned form fields directly to S3. The form
-   expires after five minutes and limits the upload to 10 MiB.
-3. The future persistence layer loads the pending record, checks ownership and
-   state, and passes it to `completeUpload`. The service checks the S3 size,
-   copies the object to a new final key, then decodes and validates the **copied**
-   JPEG, PNG, or WebP bytes. It returns a `ReadyPhoto` record for persistence.
-4. `createReadUrl` and `deletePhoto` accept only ready records loaded and
-   authorized by server code.
+### Prepare the upload
 
-The service rejects images above 16,777,216 decoded pixels and animated or
-multi-page images. It does not resize or transform accepted files.
+1. Send the file's `contentType` and `sizeBytes` to the prepare endpoint.
+   The API accepts `image/jpeg`, `image/png`, and `image/webp` for files of
+   1 byte through 10 MiB. `contentType` is the MIME type that identifies the
+   file format.
+2. Add every returned `target.fields` entry to `FormData`, then append the
+   image last as `file`. POST the form to `target.url` within five minutes.
+   S3 stores the file at the pending key along with its declared size and
+   completion deadline.
 
-## Required integration work
+See the [endpoint reference](#api-endpoints) for request and response shapes.
 
-`PendingPhotoUpload` and `ReadyPhoto` are trusted server-side records, not API
-request shapes. Persistence must claim completion atomically, make repeat calls
-idempotent, and authorize reads and deletion. It must also retain enough state to
-remove a final object if saving `ReadyPhoto` fails, and retry deletion of
-abandoned pending or final objects. Until those pieces exist, this service is
-not an end-to-end upload feature.
+### Complete the upload
+
+1. After S3 accepts the file, call the complete endpoint with the upload ID
+   in the path and an empty body.
+2. The API checks that the pending upload belongs to the signed-in user, is
+   within its deadline, and matches the declared size. It then makes a staging
+   copy and decodes it to check that it matches the declared format and has a
+   single frame.
+3. If validation succeeds, the API publishes the staging copy as the current
+   profile image. The existing profile image stays in place until publication
+   succeeds.
+
+## S3 object stages
+
+| Stage | S3 key | Purpose |
+| --- | --- | --- |
+| Pending | `pending/profile/<ownerId>/<uploadId>` | The browser uploads here using the presigned form. The API locates this object using the authenticated owner and the upload ID. |
+| Staged | `pending/validated/<randomId>` | The API creates a private copy for validation and publication. |
+| Final | `photos/profile/<ownerId>` | This stable private key holds the user's current profile image. A successful replacement overwrites it. The read and delete endpoints use this key. |
+
+### Why the API uses a staging copy
+
+The browser could upload image B to the pending key after the API checked
+image A there. The form still allows writes to that key until it expires.
+Publishing from the pending key at that point would use image B. Staging lets
+the API publish the exact bytes it validated.
+
+### Errors and cleanup
+
+| When | What happens |
+| --- | --- |
+| The pending upload is missing, expired, belongs to another user, or has invalid metadata | The API returns `404`. Any pending object stays in S3 for lifecycle cleanup. |
+| The pending object's size differs from the declared size | The API returns `400` and leaves the pending object for lifecycle cleanup. |
+| The staging copy fails validation | The API returns an error and attempts to delete the staging copy. The pending object remains eligible for lifecycle cleanup. |
+| Publication succeeds | The API attempts to delete both temporary copies. |
+
+The S3 lifecycle rule clears temporary objects left behind by failed cleanup,
+abandoned uploads, or a browser reusing an unexpired form.
+
+## API endpoints
+
+All four API endpoints require the account's Bearer access token. The direct
+S3 POST uses the presigned form fields.
+
+| Method and path | Request | Success response |
+| --- | --- | --- |
+| `POST /users/me/profile-image/uploads` | JSON body with `contentType` and `sizeBytes` | `201` with `{id, target: {url, fields, expiresAt}}` |
+| `POST /users/me/profile-image/uploads/:id/complete` | Upload ID in the path and an empty body | `200` with `{id}` after publication |
+| `GET /users/me/profile-image` | Empty body | `200` with `{image: null}` or `{image: {url}}`. The signed read URL expires after five minutes. |
+| `DELETE /users/me/profile-image` | Empty body | `204 No Content` |
+
+## Storage configuration
+
+- Set `AWS_REGION` and `S3_PHOTO_BUCKET` in the API environment.
+- Use a private bucket and allow browser POST requests from the web origin in
+  its CORS configuration.
+- Apply a lifecycle expiration rule to `pending/` to cover both pending
+  uploads and staged copies.
 
 ## Terraform definitions
 
@@ -73,6 +120,5 @@ put static AWS keys in browser code.
 
 Once that identity and bucket exist, select the profile and configure the local
 API process with `AWS_PROFILE`, `AWS_REGION=us-east-2`, and the development value
-of `photo_bucket_names` as `S3_PHOTO_BUCKET`. The AWS SDK can use the selected
-profile's credentials. This repo has no photo routes or S3 client startup wiring
-yet, so these settings do not make an end-to-end local upload available today.
+of `photo_bucket_names` as `S3_PHOTO_BUCKET`. The API uses that profile's AWS
+credentials for requests in the [upload flow](#how-prepare-and-complete-work).

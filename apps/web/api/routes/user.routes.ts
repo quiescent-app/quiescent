@@ -19,11 +19,28 @@ const requireDisplayName: RequestHandler = (req, _res, next) => {
   next();
 };
 
+const requireImageUpload: RequestHandler = (req, _res, next) => {
+  const body: unknown = req.body;
+  if (
+    typeof body !== "object" || body === null || Array.isArray(body) ||
+    !("contentType" in body) || typeof body.contentType !== "string" ||
+    !("sizeBytes" in body) || typeof body.sizeBytes !== "number"
+  ) {
+    throw new AppError(HttpStatus.BAD_REQUEST, "Expected a content type and size in bytes");
+  }
+  req.body = { contentType: body.contentType, sizeBytes: body.sizeBytes };
+  next();
+};
+
 export function createUserRouter(): Router {
   const router = Router();
   router.use(requireAuth());
   router.get("/me", userController.getProfile);
   router.patch("/me", requireDisplayName, userController.updateProfile);
+  router.get("/me/profile-image", userController.getProfileImage);
+  router.post("/me/profile-image/uploads", requireImageUpload, userController.prepareProfileImageUpload);
+  router.post("/me/profile-image/uploads/:id/complete", userController.completeProfileImageUpload);
+  router.delete("/me/profile-image", userController.deleteProfileImage);
   return router;
 }
 
