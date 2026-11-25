@@ -33,8 +33,8 @@ export default function ExtensionConnection({ extensionId }: { extensionId: stri
   }, [extensionId]);
 
   return (
-    <main className="auth-shell">
-      <section className="auth-panel" aria-live="polite">
+    <main className="landing extension-connection">
+      <section className="auth-panel extension-connection-panel" aria-live="polite">
         <h1>{state === "connected" ? "Extension connected" : "Connect your extension"}</h1>
         <p>{state === "connected" ? "You can return to the extension and save this article." : state === "connecting" ? "Connecting your extension…" : error}</p>
         {state === "error" && <Button onClick={() => void connect()} type="button">Try again</Button>}

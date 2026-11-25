@@ -1,34 +1,29 @@
 import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
-import { useAuth } from "@/auth/useAuth";
 import ExtensionConnection from "@/auth/ExtensionConnection";
+import { useAuth } from "@/auth/useAuth";
+import AuthPageLayout, { AuthPrivacyConsent } from "@/components/custom/AuthPageLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type ReturnLocation = { pathname?: string; search?: string; hash?: string };
-
 export default function LoginPage() {
   const { login, status } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const extensionId = new URLSearchParams(location.search).get("extensionId");
-  const returnTo = (location.state as { from?: ReturnLocation } | null)?.from;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!agreed || submitting) return;
     setError(null);
     setSubmitting(true);
     try {
       await login({ email, password });
-      const destination = returnTo?.pathname 
-        ? returnTo.pathname + (returnTo.search ?? "") + (returnTo.hash ?? "")
-        : "/library";
-      if (!extensionId) navigate(destination, { replace: true });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Sign in failed. Try again.");
     } finally {
@@ -41,60 +36,47 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="auth-shell">
-      <div className="auth-frame">
-        <div className="auth-brand" aria-label="Quiescent">
-          <img className="auth-brand-mark" src="/quiescent-logo.png" alt="" />
-          <span>Quiescent</span>
+    <AuthPageLayout title="Welcome to Quiescent" description="Sign in or create an account to save articles and continue reading.">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label htmlFor="login-email">Email address</label>
+          <Input
+            autoComplete="email"
+            id="login-email"
+            name="email"
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="you@example.com"
+            required
+            type="email"
+            value={email}
+          />
         </div>
 
-        <section className="auth-panel" aria-labelledby="login-title">
-          <div className="auth-heading">
-            <h1 id="login-title">Welcome back</h1>
-            <p>Sign in to continue to your reading library.</p>
-          </div>
+        <div className="auth-field">
+          <label htmlFor="login-password">Password</label>
+          <Input
+            autoComplete="current-password"
+            id="login-password"
+            name="password"
+            onChange={(event) => setPassword(event.target.value)}
+            required
+            type="password"
+            value={password}
+          />
+        </div>
 
-          <form className="auth-form" onSubmit={handleSubmit}>
-            <div className="auth-field">
-              <label htmlFor="login-email">Email address</label>
-              <Input
-                autoComplete="email"
-                autoFocus
-                id="login-email"
-                name="email"
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="you@example.com"
-                required
-                type="email"
-                value={email}
-              />
-            </div>
+        <AuthPrivacyConsent agreed={agreed} onChange={setAgreed} />
 
-            <div className="auth-field">
-              <label htmlFor="login-password">Password</label>
-              <Input
-                autoComplete="current-password"
-                id="login-password"
-                name="password"
-                onChange={(event) => setPassword(event.target.value)}
-                required
-                type="password"
-                value={password}
-              />
-            </div>
+        {error && <p className="auth-error" role="alert">{error}</p>}
 
-            {error && <p className="auth-error" role="alert">{error}</p>}
+        <Button className="auth-submit" disabled={!agreed || submitting} size="lg" type="submit">
+          {submitting ? "Signing in…" : "Sign in"}
+        </Button>
+      </form>
 
-            <Button className="auth-submit" disabled={submitting} size="lg" type="submit">
-              {submitting ? "Signing in…" : "Sign in"}
-            </Button>
-          </form>
-
-          <p className="auth-switch">
-            New to Quiescent? <Link to={{ pathname: "/signup", search: location.search }}>Create an account</Link>
-          </p>
-        </section>
-      </div>
-    </main>
+      <p className="auth-switch">
+        New to Quiescent? <Link to={{ pathname: "/signup", search: location.search }} state={location.state}>Create an account</Link>
+      </p>
+    </AuthPageLayout>
   );
 }

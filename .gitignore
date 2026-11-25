@@ -23,6 +23,9 @@ yarn-error.log*
 .vscode/
 .idea/
 
+# Local agent skills
+/.agents/
+
 # TypeScript cache
 *.tsbuildinfo
 
