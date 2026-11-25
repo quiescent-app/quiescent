@@ -1,13 +1,16 @@
-import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+﻿﻿import { useState, type FormEvent } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import ExtensionConnection from "@/auth/ExtensionConnection";
 import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 export default function SignupPage() {
-  const { signUp } = useAuth();
+  const { signUp, status } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const extensionId = new URLSearchParams(location.search).get("extensionId");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +22,16 @@ export default function SignupPage() {
     setSubmitting(true);
     try {
       await signUp({ email, password });
-      navigate("/library", { replace: true });
+      if (!extensionId) navigate("/library", { replace: true });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Account creation failed. Try again.");
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (status === "authenticated" && extensionId) {
+    return <ExtensionConnection extensionId={extensionId} key={extensionId} />;
   }
 
   return (
@@ -80,7 +87,7 @@ export default function SignupPage() {
           </form>
 
           <p className="auth-switch">
-            Already have an account? <Link to="/login">Sign in</Link>
+            Already have an account? <Link to={{ pathname: "/login", search: location.search }}>Sign in</Link>
           </p>
         </section>
       </div>

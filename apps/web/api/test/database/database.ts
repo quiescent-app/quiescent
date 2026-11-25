@@ -7,8 +7,10 @@ import { drizzle } from "drizzle-orm/pglite";
 import { articles } from "../../schema/article.schema.js";
 import { refreshTokens } from "../../schema/refreshTokens.schema.js";
 import { users } from "../../schema/user.schema.js";
+import { readerResources } from "../../schema/readerResource.schema.js";
+import { readerSessions } from "../../schema/readerSession.schema.js";
 
-const schema = { users, refreshTokens, articles };
+const schema = { users, refreshTokens, articles, readerResources, readerSessions };
 
 const schemaPath = fileURLToPath(new URL("./schema.sql", import.meta.url));
 

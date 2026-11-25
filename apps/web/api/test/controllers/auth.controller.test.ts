@@ -167,4 +167,68 @@ describe("AuthController", () => {
 
     expect(response.clearCookie).toHaveBeenCalledOnce();
   });
+
+  it("sets a separate HttpOnly cookie for the extension without returning its refresh token", async () => {
+    vi.spyOn(authService, "createExtensionSession").mockResolvedValue(authResult);
+    const response = makeResponse();
+    response.locals = { userId: authResult.user.id };
+    const extensionId = "a".repeat(32);
+
+    await authController.extensionSession(makeRequest({ extensionId }), response, vi.fn());
+
+    expect(response.cookie).toHaveBeenCalledWith(`quiescent_extension_refresh_${extensionId}`, "refresh-token", {
+      httpOnly: true,
+      secure: false,
+      sameSite: "lax",
+      path: "/auth/extension-refresh",
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+    expect(response.json).toHaveBeenCalledWith({
+      user: authResult.user,
+      accessToken: authResult.accessToken,
+    });
+  });
+
+  it("rotates the extension cookie on refresh", async () => {
+    vi.spyOn(authService, "refresh").mockResolvedValue(authResult);
+    const response = makeResponse();
+    const extensionId = "a".repeat(32);
+    response.locals = { extensionId };
+
+    await authController.extensionRefresh(
+      makeRequest({ refreshToken: "old-extension-token" }),
+      response,
+      vi.fn(),
+    );
+
+    expect(authService.refresh).toHaveBeenCalledWith("old-extension-token");
+    expect(response.cookie).toHaveBeenCalledWith(
+      `quiescent_extension_refresh_${extensionId}`,
+      "refresh-token",
+      expect.objectContaining({ httpOnly: true, path: "/auth/extension-refresh" }),
+    );
+    expect(response.json).toHaveBeenCalledWith({
+      user: authResult.user,
+      accessToken: authResult.accessToken,
+    });
+  });
+
+  it("clears only the extension cookie when extension refresh is rejected", async () => {
+    const invalidToken = new AppError(HttpStatus.UNAUTHORIZED, "Invalid refresh token");
+    vi.spyOn(authService, "refresh").mockRejectedValue(invalidToken);
+    const response = makeResponse();
+    const extensionId = "a".repeat(32);
+    response.locals = { extensionId };
+
+    await expect(authController.extensionRefresh(
+      makeRequest({ refreshToken: "expired-token" }),
+      response,
+      vi.fn(),
+    )).rejects.toBe(invalidToken);
+
+    expect(response.clearCookie).toHaveBeenCalledWith(
+      `quiescent_extension_refresh_${extensionId}`,
+      expect.objectContaining({ httpOnly: true, path: "/auth/extension-refresh" }),
+    );
+  });
 });

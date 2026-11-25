@@ -18,8 +18,10 @@ export function corsMiddleware(): RequestHandler {
     const origin = req.get("origin");
     res.vary("Origin");
 
-    if (origin === webOrigin) {
-      res.setHeader("Access-Control-Allow-Origin", webOrigin);
+    const extensionRefresh = req.path === "/auth/extension-refresh" &&
+      !!origin && /^chrome-extension:\/\/[a-p]{32}$/.test(origin);
+    if (origin === webOrigin || extensionRefresh) {
+      res.setHeader("Access-Control-Allow-Origin", origin!);
       res.setHeader("Access-Control-Allow-Credentials", "true");
       res.setHeader("Access-Control-Allow-Methods", ALLOWED_METHODS);
       res.setHeader("Access-Control-Allow-Headers", ALLOWED_HEADERS);
@@ -27,7 +29,7 @@ export function corsMiddleware(): RequestHandler {
     }
 
     if (req.method === "OPTIONS") {
-      if (origin !== webOrigin) {
+      if (origin !== webOrigin && !extensionRefresh) {
         res.status(HttpStatus.FORBIDDEN).end();
         return;
       }
