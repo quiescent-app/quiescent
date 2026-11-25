@@ -5,9 +5,13 @@ import { useState } from "react";
 import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { AuthContext } from "../src/auth/AuthContext";
-import { setAccessToken } from "../src/auth/tokenStore";
-import AccountPage from "../src/pages/AccountPage";
+import routes from "../../src/App";
+import { AuthContext } from "../../src/auth/AuthContext";
+import { setAccessToken } from "../../src/auth/tokenStore";
+import { TooltipProvider } from "../../src/components/ui/tooltip";
+import AccountPage from "../../src/pages/account/AccountPage";
+
+vi.mock("../../src/hooks/use-mobile", () => ({ useIsMobile: () => false }));
 
 const uploadUrl = "https://s3.example.com/upload";
 const savedImageUrl = "https://s3.example.com/current-image";
@@ -21,7 +25,7 @@ const originalUser = {
 const updateName = vi.fn<(displayName: string) => Promise<void>>();
 const fetchMock = vi.fn<typeof fetch>();
 
-function AccountRoute() {
+function AccountSession({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState(originalUser);
   return (
     <AuthContext.Provider value={{
@@ -35,9 +39,13 @@ function AccountRoute() {
         setUser((current) => ({ ...current, displayName }));
       },
     }}>
-      <AccountPage />
+      {children}
     </AuthContext.Provider>
   );
+}
+
+function AccountRoute() {
+  return <AccountSession><AccountPage /></AccountSession>;
 }
 
 function openEditor() {
@@ -99,8 +107,33 @@ describe("Account profile saving", () => {
 
   afterEach(() => {
     cleanup();
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
     setAccessToken(null);
+  });
+
+  it("guards an unsaved photo when navigating away from the Account route", async () => {
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const router = createMemoryRouter(routes, { initialEntries: ["/account"] });
+    render(
+      <AccountSession>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </AccountSession>,
+    );
+    await screen.findByRole("heading", { name: "Account", level: 1 });
+    choosePhoto();
+    const library = screen.getByRole("link", { name: "Library" });
+
+    fireEvent.click(library);
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(router.state.location.pathname).toBe("/account");
+    expect(screen.getByAltText("Selected profile picture preview")).toBeInTheDocument();
+
+    fireEvent.click(library);
+    await waitFor(() => expect(router.state.location.pathname).toBe("/library"));
+    expect(screen.queryByAltText("Selected profile picture preview")).not.toBeInTheDocument();
   });
 
   it("opens the editor with a photo preview when a file is dropped on the read view", () => {

@@ -7,7 +7,7 @@ import AppLayout from "@/layout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import LibraryPage from "@/pages/LibraryPage";
-import AccountPage from "@/pages/AccountPage";
+import AccountPage from "@/pages/account/AccountPage";
 
 export default createRoutesFromElements(
   <>

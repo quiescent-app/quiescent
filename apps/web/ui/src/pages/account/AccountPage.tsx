@@ -1,16 +1,17 @@
-import { ImagePlus, LoaderCircle, Pencil, UserRound } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState, type ChangeEvent, type DragEvent, type FormEvent } from "react";
+import { LoaderCircle, Pencil } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 
 import { ApiError } from "@/api/apiClient";
 import { useAuth } from "@/auth/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { deleteProfileImage, getProfileImage, uploadProfileImage } from "@/service/profile.service";
+import { deleteProfileImage, getProfileImage, uploadProfileImage } from "@/service/profileImage.service";
 import type { AuthUser } from "@/types/auth";
 
-const PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+import { ProfileImageField } from "./ProfileImageField";
+import { MAX_PROFILE_IMAGE_BYTES, PROFILE_IMAGE_TYPES, type ProfileImageDraft } from "./profileImage";
+
 const DISPLAY_NAME_HINT =
   "Use 1–40 characters: letters, numbers, spaces, periods, underscores, or hyphens.";
 const DISCARD_CHANGES = "Discard your unsaved profile changes?";
@@ -31,11 +32,9 @@ function AccountProfile({ user, updateProfile }: {
   const editButtonRef = useRef<HTMLButtonElement>(null);
   const restoreEditFocus = useRef(false);
   const editFocus = useRef<"name" | "photo">("name");
-  const inputRef = useRef<HTMLInputElement>(null);
   const chooseButtonRef = useRef<HTMLButtonElement>(null);
   const [draftName, setDraftName] = useState<string | null>(null);
-  const [photo, setPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
-  const [isDraggingPhoto, setIsDraggingPhoto] = useState(false);
+  const [photo, setPhoto] = useState<ProfileImageDraft | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
   const [savedImageUrl, setSavedImageUrl] = useState<string | null>(null);
   const [imageVersion, setImageVersion] = useState(0);
@@ -122,19 +121,13 @@ function AccountProfile({ user, updateProfile }: {
     restoreEditFocus.current = true;
   }
 
-  function selectPhoto(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.currentTarget.files?.[0];
-    event.currentTarget.value = "";
-    if (file) previewPhoto(file);
-  }
-
   function previewPhoto(file: File) {
     if (!isEditing) startEditing("photo");
-    if (!PHOTO_TYPES.includes(file.type)) {
+    if (!PROFILE_IMAGE_TYPES.includes(file.type)) {
       setPhotoError("Choose a JPEG, PNG, or WebP image.");
       return;
     }
-    if (file.size === 0 || file.size > MAX_PHOTO_BYTES) {
+    if (file.size === 0 || file.size > MAX_PROFILE_IMAGE_BYTES) {
       setPhotoError("Choose a non-empty image no larger than 10 MiB.");
       return;
     }
@@ -144,21 +137,6 @@ function AccountProfile({ user, updateProfile }: {
     setStatus("");
     setRemovePhoto(false);
     setPhoto({ file, previewUrl: URL.createObjectURL(file) });
-  }
-
-  function handlePhotoDrag(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = isSaving ? "none" : "copy";
-    if (!isSaving) setIsDraggingPhoto(true);
-  }
-
-  function dropPhoto(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes("Files")) return;
-    event.preventDefault();
-    setIsDraggingPhoto(false);
-    const file = event.dataTransfer.files[0];
-    if (!isSaving && file) previewPhoto(file);
   }
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
@@ -244,140 +222,38 @@ function AccountProfile({ user, updateProfile }: {
           aria-busy={isSaving}
           onSubmit={saveProfile}
         >
-          <div
-            role="group"
-            aria-labelledby="profile-photo-label"
-            className={`grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-4 py-4 motion-safe:transition-colors sm:gap-x-5 sm:px-6 sm:py-5 ${
-              isDraggingPhoto ? "bg-sidebar-accent ring-2 ring-inset ring-sidebar-ring" : "bg-sidebar/55"
-            }`}
-            onDragOver={handlePhotoDrag}
-            onDragLeave={(event) => {
-              if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
-                setIsDraggingPhoto(false);
-              }
+          <ProfileImageField
+            chooseButtonRef={chooseButtonRef}
+            isEditing={isEditing}
+            isSaving={isSaving}
+            photo={photo}
+            savedImageUrl={savedImageUrl}
+            removePhoto={removePhoto}
+            photoError={photoError}
+            imageLoadError={imageLoadError}
+            onSelect={previewPhoto}
+            onClear={() => {
+              setPhoto(null);
+              setPhotoError("");
+              setSaveError("");
             }}
-            onDrop={dropPhoto}
-          >
-            <div className="grid size-16 shrink-0 place-items-center overflow-hidden rounded-full border border-sidebar-border bg-sidebar-accent text-sidebar-foreground sm:row-span-2 sm:size-20">
-              {photo ? (
-                <img
-                  key={photo.previewUrl}
-                  src={photo.previewUrl}
-                  alt="Selected profile picture preview"
-                  className="size-full object-cover"
-                  onError={() => {
-                    setPhoto(null);
-                    setPhotoError("This image could not be opened. Choose another image.");
-                  }}
-                />
-              ) : savedImageUrl && !removePhoto && !imageLoadError ? (
-                <img
-                  src={savedImageUrl}
-                  alt="Profile picture"
-                  className="size-full object-cover"
-                  onError={() => setImageLoadError("Could not load your profile picture.")}
-                />
-              ) : (
-                <UserRound role="img" aria-label="No profile picture" className="size-7 sm:size-8" strokeWidth={1.5} />
-              )}
-            </div>
-
-            <div className="min-w-0">
-              <p id="profile-photo-label" className="text-sm font-semibold text-sidebar-foreground">
-                Profile picture
-              </p>
-              <p id="profile-photo-formats" className="mt-1 text-sm text-sidebar-foreground/80">
-                {isDraggingPhoto ? "Drop your image here." : (
-                  <>
-                    <span className="hidden sm:inline">Drag and drop or choose a file. </span>
-                    JPEG, PNG or WebP up to 10 MiB.
-                  </>
-                )}
-              </p>
-            </div>
-
-            <input
-              ref={inputRef}
-              type="file"
-              aria-label="Profile picture file"
-              accept={PHOTO_TYPES.join(",")}
-              hidden
-              disabled={isSaving}
-              onChange={selectPhoto}
-            />
-            <div className="col-span-2 flex min-w-0 flex-wrap items-center gap-2 sm:col-span-1 sm:col-start-2">
-              <Button
-                ref={chooseButtonRef}
-                type="button"
-                variant="outline"
-                className="min-h-11 px-3.5"
-                disabled={isSaving}
-                aria-describedby="profile-photo-formats"
-                onClick={() => inputRef.current?.click()}
-              >
-                <ImagePlus aria-hidden="true" />
-                {photo ? "Choose another" : savedImageUrl && !removePhoto ? "Change picture" : "Choose picture"}
-              </Button>
-              {isEditing && photo && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-11 px-3"
-                  disabled={isSaving}
-                  onClick={() => {
-                    setPhoto(null);
-                    setPhotoError("");
-                    setSaveError("");
-                    chooseButtonRef.current?.focus();
-                  }}
-                >
-                  Clear selection
-                </Button>
-              )}
-              {isEditing && savedImageUrl && !photo && (
-                <Button
-                  type="button"
-                  variant={removePhoto ? "outline" : "ghost"}
-                  className={`min-h-11 px-3 ${removePhoto ? "" : "text-destructive hover:text-destructive"}`}
-                  disabled={isSaving}
-                  onClick={() => {
-                    setRemovePhoto(!removePhoto);
-                    setPhotoError("");
-                    setSaveError("");
-                    setStatus("");
-                  }}
-                >
-                  {removePhoto ? "Undo removal" : "Remove profile picture"}
-                </Button>
-              )}
-            </div>
-
-            <div role="status" className="col-span-2 -mt-1 text-sm wrap-anywhere text-sidebar-foreground empty:sr-only sm:col-span-1 sm:col-start-2">
-              {photo && <>Selected: {photo.file.name}</>}
-              {removePhoto && "Your profile picture will be removed when you save."}
-            </div>
-            {photoError && (
-              <p role="alert" className="col-span-2 text-sm text-destructive sm:col-span-1 sm:col-start-2">{photoError}</p>
-            )}
-            {imageLoadError && !photo && !removePhoto && (
-              <div className="col-span-2 flex flex-wrap items-center gap-x-3 sm:col-span-1 sm:col-start-2">
-                <p role="alert" className="text-sm text-destructive">{imageLoadError}</p>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="min-h-11"
-                  disabled={isSaving}
-                  onClick={() => {
-                    setSavedImageUrl(null);
-                    setImageLoadError("");
-                    setImageVersion((version) => version + 1);
-                  }}
-                >
-                  Retry loading
-                </Button>
-              </div>
-            )}
-          </div>
+            onToggleRemoval={() => {
+              setRemovePhoto(!removePhoto);
+              setPhotoError("");
+              setSaveError("");
+              setStatus("");
+            }}
+            onInvalidPreview={() => {
+              setPhoto(null);
+              setPhotoError("This image could not be opened. Choose another image.");
+            }}
+            onImageLoadError={() => setImageLoadError("Could not load your profile picture.")}
+            onRetry={() => {
+              setSavedImageUrl(null);
+              setImageLoadError("");
+              setImageVersion((version) => version + 1);
+            }}
+          />
 
           <div className="border-t border-sidebar-border px-4 py-4 sm:px-6 sm:py-5">
             {isEditing ? (

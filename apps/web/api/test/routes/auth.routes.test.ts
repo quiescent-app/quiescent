@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+﻿import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import type { RequestHandler } from "express";
 
 import { createApp } from "../../app.js";
 import { HttpStatus } from "../../errors/appError.js";
+import { createAccessToken } from "../../utils/token.utils.js";
 
 const authResult = {
   user: {
@@ -34,6 +35,8 @@ const { authControllerMock } = vi.hoisted(() => {
       login: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
       refresh: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
       logout: vi.fn<RequestHandler>((_req, res) => { res.status(204).end(); }),
+      extensionSession: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
+      extensionRefresh: vi.fn<RequestHandler>((_req, res) => { res.status(200).json(result); }),
     },
   };
 });
@@ -167,6 +170,67 @@ describe("authentication routes", () => {
     expect(authControllerMock.refresh).not.toHaveBeenCalled();
   });
 
+  it("reads the extension refresh cookie only for an extension origin", async () => {
+    const extensionId = "a".repeat(32);
+    const origin = `chrome-extension://${extensionId}`;
+    const response = await send("/auth/extension-refresh", "{}", {
+      origin,
+      cookie: `quiescent_refresh=web-token; quiescent_extension_refresh_${extensionId}=extension-token`,
+    });
+
+    expect(response.status).toBe(HttpStatus.OK);
+    expect(authControllerMock.extensionRefresh.mock.calls[0]?.[0].body).toEqual({
+      refreshToken: "extension-token",
+    });
+  });
+
+  it("rejects extension refresh with the web cookie or a web origin", async () => {
+    const extensionId = "a".repeat(32);
+    const origin = `chrome-extension://${extensionId}`;
+    const missing = await send("/auth/extension-refresh", "{}", {
+      origin,
+      cookie: "quiescent_refresh=web-token",
+    });
+    const wrongOrigin = await send("/auth/extension-refresh", "{}", {
+      origin: webOrigin,
+      cookie: `quiescent_extension_refresh_${extensionId}=extension-token`,
+    });
+
+    expect(missing.status).toBe(HttpStatus.UNAUTHORIZED);
+    expect(wrongOrigin.status).toBe(HttpStatus.FORBIDDEN);
+    expect(authControllerMock.extensionRefresh).not.toHaveBeenCalled();
+  });
+
+  it("does not use another extension's refresh cookie", async () => {
+    const requestedId = "a".repeat(32);
+    const otherId = "b".repeat(32);
+    const response = await send("/auth/extension-refresh", "{}", {
+      origin: `chrome-extension://${requestedId}`,
+      cookie: `quiescent_extension_refresh_${otherId}=other-token`,
+    });
+
+    expect(response.status).toBe(HttpStatus.UNAUTHORIZED);
+    expect(authControllerMock.extensionRefresh).not.toHaveBeenCalled();
+  });
+
+  it("requires a valid extension ID when creating an extension session", async () => {
+    const accessToken = await createAccessToken(authResult.user.id);
+    const extensionId = "a".repeat(32);
+    const valid = await send("/auth/extension-session", JSON.stringify({ extensionId }), {
+      authorization: `Bearer ${accessToken}`,
+      origin: webOrigin,
+    });
+    const invalid = await send("/auth/extension-session", JSON.stringify({ extensionId: "wrong" }), {
+      authorization: `Bearer ${accessToken}`,
+      origin: webOrigin,
+    });
+
+    expect(valid.status).toBe(HttpStatus.OK);
+    expect(authControllerMock.extensionSession.mock.calls[0]?.[0].body).toEqual({ extensionId });
+    expect(invalid.status).toBe(HttpStatus.BAD_REQUEST);
+    expect(authControllerMock.extensionSession).toHaveBeenCalledOnce();
+  });
+
   it("should return status code 400 without calling the controller when the JSON body is malformed", async () => {
     const malformed = await send("/auth/sign-up", "{");
 
@@ -220,3 +284,4 @@ describe("authentication routes", () => {
     expect(authControllerMock.login).not.toHaveBeenCalled();
   });
 });
+
