@@ -9,6 +9,7 @@ export interface AuthContextType {
   login: (credentials: Credentials) => Promise<void>;
   signUp: (credentials: Credentials) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (displayName: string) => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(
