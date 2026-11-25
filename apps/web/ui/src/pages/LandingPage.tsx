@@ -3,6 +3,7 @@ import { ArrowRight, BookmarkCheck, Mail, NotebookPen, Puzzle } from "lucide-rea
 import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/useAuth";
+import PrivacyPolicyDialog from "@/components/custom/PrivacyPolicyDialog";
 
 const sections = [
   { id: "save", label: "Save" },
@@ -200,7 +201,7 @@ export default function LandingPage() {
             <p>Read deeply in a noisy world.</p>
           </div>
           <ul>
-            <li><Link to="/privacy">Privacy Policy</Link></li>
+            <li><PrivacyPolicyDialog /></li>
             <li><a href="mailto:quiescent.support@gmail.com"><Mail size={14} aria-hidden="true" /> quiescent.support@gmail.com</a></li>
           </ul>
           <small>© {new Date().getFullYear()} Quiescent</small>

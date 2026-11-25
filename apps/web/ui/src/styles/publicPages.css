@@ -369,6 +369,124 @@
   margin-top: .5rem;
 }
 
+.privacy-dialog-trigger {
+  color: var(--landing-ink);
+  text-decoration: underline;
+  text-underline-offset: .2em;
+  cursor: pointer;
+}
+
+.privacy-dialog-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  background: rgb(29 41 64 / 30%);
+}
+
+.privacy-dialog {
+  --privacy-dialog-padding: clamp(1rem, 3.5vw, 1.5rem);
+  position: fixed;
+  z-index: 11;
+  inset: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(42rem, calc(100% - 1.5rem));
+  height: fit-content;
+  max-height: calc(100dvh - clamp(1.5rem, 7dvh, 3rem));
+  margin: auto;
+  overflow: hidden;
+  border: 1px solid var(--landing-line);
+  border-radius: .85rem;
+  background: var(--landing-surface);
+}
+
+.privacy-dialog-header,
+.privacy-dialog-footer {
+  display: flex;
+  align-items: center;
+  padding: .65rem var(--privacy-dialog-padding);
+}
+
+.privacy-dialog-header {
+  justify-content: space-between;
+  gap: .75rem;
+  border-bottom: 1px solid var(--landing-line);
+}
+
+.privacy-dialog-header h2,
+.privacy-dialog-body h3 {
+  font-family: var(--landing-serif);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.privacy-dialog-header h2 {
+  font-size: 1.55rem;
+}
+
+.privacy-dialog-icon {
+  display: grid;
+  flex: none;
+  width: 2.75rem;
+  height: 2.75rem;
+  place-items: center;
+  border-radius: .5rem;
+  color: var(--landing-muted);
+  cursor: pointer;
+}
+
+.privacy-dialog-icon:hover {
+  background: var(--landing-sage);
+}
+
+.privacy-dialog-icon:focus-visible,
+.privacy-dialog-footer .landing-button:focus-visible {
+  outline-offset: 0;
+}
+
+.privacy-dialog-body {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--privacy-dialog-padding);
+}
+
+.privacy-dialog-body:focus-visible {
+  outline-offset: -3px;
+}
+
+.privacy-dialog-body .privacy-section {
+  padding: 0;
+  margin-top: 1.6rem;
+  border: 0;
+}
+
+.privacy-dialog-body h3 {
+  margin-bottom: .55rem;
+  font-size: 1.3rem;
+}
+
+.privacy-dialog-body strong {
+  color: var(--landing-ink);
+}
+
+.privacy-dialog-body a {
+  text-decoration: underline;
+  text-underline-offset: .15em;
+  overflow-wrap: anywhere;
+}
+
+.privacy-dialog-footer {
+  border-top: 1px solid var(--landing-line);
+}
+
+.privacy-dialog-footer .landing-button {
+  background: var(--landing-ink);
+}
+
+.privacy-dialog-footer .landing-button:hover {
+  background: #32415b;
+}
+
 @media (max-width: 760px) {
   .auth-shell {
     display: block;

@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -81,11 +81,21 @@ describe("App", () => {
       expect(link).toHaveAttribute("href", "https://chromewebstore.google.com/search/Quiescent");
       expect(link).toHaveAttribute("target", "_blank");
     });
+  });
 
-    fireEvent.click(screen.getByRole("link", { name: "Privacy Policy" }));
-    expect(screen.getByRole("heading", { name: "Privacy Policy", level: 1 })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("link", { name: "Quiescent home" }));
-    expect(screen.getByRole("heading", { name: "Read deeply in a noisy world.", level: 1 })).toBeInTheDocument();
+  it("opens the policy from the landing footer and returns focus there on close", async () => {
+    renderApp("/?ref=footer");
+
+    const trigger = screen.getByRole("button", { name: "Privacy Policy" });
+    fireEvent.click(trigger);
+
+    const dialog = await screen.findByRole("dialog", { name: "Privacy Policy" });
+    expect(within(dialog).getByRole("heading", { name: "What we collect" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Current location", { selector: "output" })).toHaveTextContent("/?ref=footer");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Close", exact: true }));
+
+    await waitFor(() => expect(dialog).not.toBeInTheDocument());
+    await waitFor(() => expect(trigger).toHaveFocus());
   });
 
   it("requires consent before signing in and returns the reader to the requested library URL", async () => {
@@ -119,6 +129,8 @@ describe("App", () => {
     expect(screen.getByLabelText("Current location")).toHaveTextContent("/privacy#security");
     expect(screen.getByRole("heading", { name: "Security" })).toHaveFocus();
     expect(screen.getByRole("link", { name: "Security" })).toHaveAttribute("aria-current", "location");
+    fireEvent.click(screen.getByRole("link", { name: "Quiescent home" }));
+    expect(screen.getByRole("heading", { name: "Read deeply in a noisy world.", level: 1 })).toBeInTheDocument();
   });
 
   it("routes signed-in readers directly to their library", async () => {
