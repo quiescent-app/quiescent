@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { deleteProfileImage, getProfileImage, uploadProfileImage } from "@/service/profileImage.service";
 import type { AuthUser } from "@/types/auth";
 
-import { ProfileImageField } from "./ProfileImageField";
-import { MAX_PROFILE_IMAGE_BYTES, PROFILE_IMAGE_TYPES, type ProfileImageDraft } from "./profileImage";
+import { ProfileImageField, type ProfileImageDraft } from "./ProfileImageField";
 
+const PROFILE_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_PROFILE_IMAGE_BYTES = 10 * 1024 * 1024;
 const DISPLAY_NAME_HINT =
   "Use 1–40 characters: letters, numbers, spaces, periods, underscores, or hyphens.";
 const DISCARD_CHANGES = "Discard your unsaved profile changes?";
@@ -223,6 +224,7 @@ function AccountProfile({ user, updateProfile }: {
           onSubmit={saveProfile}
         >
           <ProfileImageField
+            accept={PROFILE_IMAGE_TYPES.join(",")}
             chooseButtonRef={chooseButtonRef}
             isEditing={isEditing}
             isSaving={isSaving}

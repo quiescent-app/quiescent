@@ -3,9 +3,13 @@ import { useRef, useState, type ChangeEvent, type DragEvent, type RefObject } fr
 
 import { Button } from "@/components/ui/button";
 
-import { PROFILE_IMAGE_TYPES, type ProfileImageDraft } from "./profileImage";
+export interface ProfileImageDraft {
+  file: File;
+  previewUrl: string;
+}
 
 interface ProfileImageFieldProps {
+  accept: string;
   chooseButtonRef: RefObject<HTMLButtonElement | null>;
   isEditing: boolean;
   isSaving: boolean;
@@ -23,6 +27,7 @@ interface ProfileImageFieldProps {
 }
 
 export function ProfileImageField({
+  accept,
   chooseButtonRef,
   isEditing,
   isSaving,
@@ -116,7 +121,7 @@ export function ProfileImageField({
         ref={inputRef}
         type="file"
         aria-label="Profile picture file"
-        accept={PROFILE_IMAGE_TYPES.join(",")}
+        accept={accept}
         hidden
         disabled={isSaving}
         onChange={selectPhoto}
