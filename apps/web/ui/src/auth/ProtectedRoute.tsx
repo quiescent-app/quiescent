@@ -1,6 +1,8 @@
-import { Navigate, Outlet, useLocation } from "react-router-dom";
+import { Navigate, Outlet, useLocation, type Path } from "react-router-dom";
 
 import { useAuth } from "./useAuth";
+
+export type LoginLocationState = { from?: Path };
 
 export default function ProtectedRoute() {
   const { status } = useAuth();
@@ -11,7 +13,8 @@ export default function ProtectedRoute() {
   }
 
   if (status === "unauthenticated") {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    const state = { from: location };
+    return <Navigate to="/login" replace state={state} />;
   }
 
   return <Outlet />;

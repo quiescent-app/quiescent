@@ -14,11 +14,9 @@ import {
 } from "@/components/ui/sidebar";
 
 import { mainNavigation, bottomNavigation } from "./navigation";
-import { useAuth } from "@/auth/useAuth";
 
-export function AppSidebar() {
+export function AppSidebar({ onLogout }: { onLogout: () => void }) {
   const { state, toggleSidebar, isMobile, setOpenMobile } = useSidebar();
-  const { logout } = useAuth();
 
   const { pathname } = useLocation();
 
@@ -79,7 +77,10 @@ export function AppSidebar() {
             <SidebarMenuButton
               tooltip="Log out"
               className="h-10 rounded-lg px-3 text-sm"
-              onClick={() => { void logout(); }}
+              onClick={() => {
+                if (isMobile) setOpenMobile(false);
+                onLogout();
+              }}
             >
               <LogOut />
               <span>Log out</span>
