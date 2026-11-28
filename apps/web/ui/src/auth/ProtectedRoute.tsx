@@ -11,7 +11,7 @@ export default function ProtectedRoute() {
   }
 
   if (status === "unauthenticated") {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to="/signin" replace state={{ from: location }} />;
   }
 
   return <Outlet />;

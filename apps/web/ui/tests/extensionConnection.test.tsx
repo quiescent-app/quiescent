@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthContext, type AuthContextType } from "../src/auth/AuthContext";
 import { connectExtension } from "../src/auth/connectExtension";
 import LoginPage from "../src/pages/LoginPage";
+import PrivacyPage from "../src/pages/PrivacyPage";
 import SignupPage from "../src/pages/SignupPage";
 
 vi.mock("../src/auth/connectExtension", () => ({ connectExtension: vi.fn() }));
@@ -26,6 +27,8 @@ function renderAuth(path: string, status: AuthContextType["status"] = "unauthent
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/signin" element={<LoginPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/library" element={<p>Library</p>} />
         </Routes>
@@ -36,12 +39,14 @@ function renderAuth(path: string, status: AuthContextType["status"] = "unauthent
 }
 
 beforeEach(() => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
   vi.mocked(connectExtension).mockResolvedValue(undefined);
 });
 
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("extension auth handoff", () => {
@@ -51,10 +56,19 @@ describe("extension auth handoff", () => {
       .toBe(`/signup?extensionId=${extensionId}`);
   });
 
+  it("preserves the extension ID when visiting the privacy policy", () => {
+    renderAuth(`/login?extensionId=${extensionId}`);
+    fireEvent.click(screen.getByRole("link", { name: "Privacy Policy" }));
+    fireEvent.click(screen.getByRole("link", { name: "Sign in" }));
+    expect(screen.getByRole("link", { name: "Create an account" }).getAttribute("href"))
+      .toBe(`/signup?extensionId=${extensionId}`);
+  });
+
   it.each(["login", "signup"])("connects after %s", async (page) => {
     const auth = renderAuth(`/${page}?extensionId=${extensionId}`);
     fireEvent.change(screen.getByLabelText("Email address"), { target: { value: "reader@example.com" } });
     fireEvent.change(screen.getByLabelText("Password"), { target: { value: "password123" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: /agree to the privacy policy/i }));
     fireEvent.click(screen.getByRole("button", { name: page === "login" ? "Sign in" : "Create account" }));
     await waitFor(() => expect(page === "login" ? auth.login : auth.signUp).toHaveBeenCalledOnce());
 
