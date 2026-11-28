@@ -1,8 +1,8 @@
 import { render } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { createMemoryRouter, RouterProvider } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
-import App from "../src/App";
+import routes from "../src/App";
 import AuthProvider from "../src/auth/AuthProvider";
 
 vi.mock("../src/auth/authEvents", () => ({
@@ -27,11 +27,9 @@ vi.mock("../src/hooks/use-mobile", () => ({
 describe("App", () => {
   it("renders without crashing", () => {
     const { container } = render(
-      <MemoryRouter>
-        <AuthProvider>
-          <App />
-        </AuthProvider>
-      </MemoryRouter>,
+      <AuthProvider>
+        <RouterProvider router={createMemoryRouter(routes)} />
+      </AuthProvider>,
     );
 
     expect(container).toBeTruthy();

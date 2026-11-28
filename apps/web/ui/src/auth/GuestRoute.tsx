@@ -1,9 +1,11 @@
-import { Navigate, Outlet, useSearchParams } from "react-router-dom";
+import { Navigate, Outlet, useLocation, useSearchParams } from "react-router-dom";
 
+import type { LoginLocationState } from "./ProtectedRoute";
 import { useAuth } from "./useAuth";
 
 export default function GuestRoute() {
   const { status } = useAuth();
+  const location = useLocation();
   const [params] = useSearchParams();
 
   if (status === "loading") {
@@ -11,7 +13,8 @@ export default function GuestRoute() {
   }
 
   if (status === "authenticated" && !params.has("extensionId")) {
-    return <Navigate to="/library" replace />;
+    const returnTo = (location.state as LoginLocationState | null)?.from;
+    return <Navigate to={returnTo ?? "/library"} replace />;
   }
 
   return <Outlet />;

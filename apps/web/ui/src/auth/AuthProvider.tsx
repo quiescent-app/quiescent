@@ -9,6 +9,7 @@ import {
   refreshSession,
   signUp as requestSignUp,
 } from "../service/auth.service";
+import { updateProfile as requestProfileUpdate } from "../service/profile.service";
 import type { AuthUser, Credentials } from "../types/auth";
 
 export default function AuthProvider({ children }: { children: ReactNode }) {
@@ -59,8 +60,13 @@ export default function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const updateProfile = useCallback(async (displayName: string) => {
+    const updated = await requestProfileUpdate(displayName);
+    setUser((current) => current?.id === updated.id ? updated : current);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ status, user, login, signUp, logout }}>
+    <AuthContext.Provider value={{ status, user, login, signUp, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

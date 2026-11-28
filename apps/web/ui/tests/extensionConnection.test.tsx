@@ -20,6 +20,7 @@ function renderAuth(path: string, status: AuthContextType["status"] = "unauthent
     login,
     signUp,
     logout: vi.fn().mockResolvedValue(undefined),
+    updateProfile: vi.fn().mockResolvedValue(undefined),
   };
   const view = render(
     <AuthContext.Provider value={context}>

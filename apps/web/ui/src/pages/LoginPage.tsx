@@ -1,34 +1,26 @@
-import { useState, type FormEvent } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useState, type SubmitEvent } from "react";
+import { Link, useLocation } from "react-router-dom";
 
 import { useAuth } from "@/auth/useAuth";
 import ExtensionConnection from "@/auth/ExtensionConnection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-type ReturnLocation = { pathname?: string; search?: string; hash?: string };
-
 export default function LoginPage() {
   const { login, status } = useAuth();
-  const navigate = useNavigate();
   const location = useLocation();
   const extensionId = new URLSearchParams(location.search).get("extensionId");
-  const returnTo = (location.state as { from?: ReturnLocation } | null)?.from;
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     setSubmitting(true);
     try {
       await login({ email, password });
-      const destination = returnTo?.pathname 
-        ? returnTo.pathname + (returnTo.search ?? "") + (returnTo.hash ?? "")
-        : "/library";
-      if (!extensionId) navigate(destination, { replace: true });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Sign in failed. Try again.");
     } finally {
