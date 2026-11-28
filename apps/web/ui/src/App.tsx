@@ -14,10 +14,10 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/privacy" element={<PrivacyPage/>} />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />
-        <Route path="/privacypolicy" element={<PrivacyPage/>} />
       </Route>
 
       {/* Protected routes */}
