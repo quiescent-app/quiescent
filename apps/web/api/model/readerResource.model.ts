@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { database } from "../db/client.js";
 import { readerResources, type ReaderResource } from "../schema/readerResource.schema.js";
 
@@ -43,16 +43,15 @@ export class ReaderResourceModel {
   }
 
   /**
-   * Changes the resource's status only if its current status is in allowedPredecessors.
+   * Saves this user's resource status and updates its modification time.
    * Returns the updated resource, or null if nothing matches.
    */
   async setStatus(
     owner: ReaderOwner, id: string, status: ReaderResource["status"],
-    allowedPredecessors: readonly ReaderResource["status"][],
   ): Promise<ReaderResource | null> {
     const [resource] = await database.update(readerResources)
       .set({ status, updatedAt: sql`clock_timestamp()` })
-      .where(and(eq(readerResources.id, id), eq(readerResources.userId, owner.userId), inArray(readerResources.status, [...allowedPredecessors])))
+      .where(and(eq(readerResources.id, id), eq(readerResources.userId, owner.userId)))
       .returning();
     return resource ?? null;
   }

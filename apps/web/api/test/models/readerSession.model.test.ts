@@ -31,9 +31,8 @@ describe("ReaderSessionModel", () => {
   const resources = new ReaderResourceModel();
   const sessions = new ReaderSessionModel();
   const input = { sourceType: "url", url: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
-  const position = { progress: 45, scrollOffset: 2400, pageNumber: null, navigationState: "history" } as const;
+  const position = { progress: 45, scrollOffset: 2400, pageNumber: null } as const;
   const opening = { from: "not_started", to: "reading" } as const;
-  const active = { allowedPredecessors: ["active"], requireUsableSource: true } as const;
   const createResource = () => resources.create(owner, input);
   async function open(resourceId: string) {
     const visit = await sessions.open(owner, resourceId, opening);
@@ -75,21 +74,22 @@ describe("ReaderSessionModel", () => {
     state.current = undefined;
   });
 
-  it.each(["matching", "nonmatching", "empty"] as const)("should update progress and status only when the supplied conditions match (%s)", async (mode) => {
+  it("should save progress, status, failure code, and modification time for an open session", async () => {
     const resource = await createResource();
     const visit = await open(resource.id);
     const before = await resources.findById(owner, resource.id);
-    const allowed = mode === "matching" ? ["active"] as const : mode === "nonmatching" ? ["failed"] as const : [];
-    const progress = await sessions.updateProgress(owner, visit.id, position, allowed);
-    const changed = await sessions.setStatus(owner, visit.id, "paused", { ...active, allowedPredecessors: allowed });
-    if (mode === "matching") {
-      expect(progress).toMatchObject(position);
-      expect(changed).toMatchObject({ ...position, status: "paused" });
-    } else {
-      expect([progress, changed]).toEqual([null, null]);
-      expect(await sessions.findById(owner, visit.id)).toEqual(visit);
-    }
+    expect(await sessions.setStatus(owner, visit.id, "failed", "unavailable"))
+      .toMatchObject({ status: "failed", failureCode: "unavailable" });
+    const progress = await sessions.updateProgress(owner, visit.id, position);
+    expect(progress).toMatchObject({ ...position, status: "failed", failureCode: "unavailable" });
+    expect(progress!.updatedAt.getTime()).toBeGreaterThanOrEqual(visit.updatedAt.getTime());
+    const changed = await sessions.setStatus(owner, visit.id, "active");
+    expect(changed).toMatchObject({ ...position, status: "active", failureCode: null });
+    expect(changed!.updatedAt.getTime()).toBeGreaterThanOrEqual(progress!.updatedAt.getTime());
+    expect(await sessions.findById(owner, visit.id)).toEqual(changed);
     expect(await resources.findById(owner, resource.id)).toEqual(before);
+    expect(await sessions.updateProgress(owner, crypto.randomUUID(), position)).toBeNull();
+    expect(await sessions.setStatus(owner, crypto.randomUUID(), "active")).toBeNull();
   });
 
   it("should prevent reading or changing another user's records", async () => {
@@ -99,8 +99,8 @@ describe("ReaderSessionModel", () => {
     expect(await sessions.findById(other, visit.id)).toBeNull();
     expect(await sessions.findLatestSession(other, resource.id)).toBeNull();
     expect(await sessions.recent(other)).toEqual([]);
-    expect(await sessions.updateProgress(other, visit.id, position, ["active"])).toBeNull();
-    expect(await sessions.setStatus(other, visit.id, "paused", active)).toBeNull();
+    expect(await sessions.updateProgress(other, visit.id, position)).toBeNull();
+    expect(await sessions.setStatus(other, visit.id, "failed", "unavailable")).toBeNull();
     expect(await sessions.end(other, visit.id)).toBeNull();
     expect(await sessions.findById(owner, visit.id)).toEqual(visit);
   });
@@ -110,7 +110,7 @@ describe("ReaderSessionModel", () => {
     expect(await sessions.findLatestSession(owner, resource.id)).toBeNull();
     const visit = await open(resource.id);
     expect(visit).toMatchObject({ userId: owner.userId, resourceId: resource.id, initialProgress: 0, progress: 0,
-      navigationState: "resource", scrollOffset: null, pageNumber: null, status: "active", failureCode: null, endedAt: null });
+      scrollOffset: null, pageNumber: null, status: "active", failureCode: null, endedAt: null });
     expect(visit.updatedAt).toEqual(visit.createdAt);
     expect(await resources.findById(owner, resource.id)).toMatchObject({ status: "reading", lastAccessedAt: visit.createdAt });
     const exact = await client.query("SELECT r.last_accessed_at = s.created_at AS synchronized FROM reader_resources r JOIN reader_sessions s ON s.resource_id=r.id WHERE s.id=$1", [visit.id]);
@@ -131,13 +131,13 @@ describe("ReaderSessionModel", () => {
     expect(second).toMatchObject({ ...position, ...reading, initialProgress: reading.progress, endedAt: null });
     const history = await sessions.findById(owner, first.id);
     expect(history).toMatchObject({ ...position, ...reading, initialProgress: 0, createdAt: first.createdAt, endedAt: expect.any(Date) });
-    expect(await sessions.updateProgress(owner, first.id, position, [reading.status])).toBeNull();
-    expect(await sessions.setStatus(owner, first.id, "paused", { ...active, allowedPredecessors: [reading.status] })).toBeNull();
+    expect(await sessions.updateProgress(owner, first.id, position)).toBeNull();
+    expect(await sessions.setStatus(owner, first.id, "failed", "unavailable")).toBeNull();
     expect(await sessions.findById(owner, first.id)).toEqual(history);
     expect(await sessions.findLatestSession(owner, resource.id)).toEqual(second);
     expect((await resources.findById(owner, resource.id))?.status).toBe("finished");
     if (reading.status === "active")
-      expect(await sessions.updateProgress(owner, second.id, { ...position, progress: 20 }, ["active"])).toMatchObject({ initialProgress: 45, progress: 20 });
+      expect(await sessions.updateProgress(owner, second.id, { ...position, progress: 20 })).toMatchObject({ initialProgress: 45, progress: 20 });
   });
 
   it("should find the latest session when start times match and list history newest first", async () => {
@@ -148,33 +148,36 @@ describe("ReaderSessionModel", () => {
     const [older] = await db.insert(readerSessions).values({ userId: owner.userId, resourceId: resource.id, createdAt: old, endedAt: old, updatedAt: new Date("2030-01-01") }).returning();
     expect((await sessions.findLatestSession(owner, resource.id))?.id).toBe(ids[1]);
     const history = await sessions.recent(owner);
-    expect(history.map((row) => row.session.createdAt)).toEqual([recent, recent, old]);
-    expect(history[2]?.session.id).toBe(older!.id);
+    expect(history.map((row) => row.createdAt)).toEqual([recent, recent, old]);
+    expect(history[2]?.id).toBe(older!.id);
   });
 
   it("should end a session only once without changing its progress or the resource's access time", async () => {
     const resource = await createResource();
     const visit = await open(resource.id);
-    await sessions.updateProgress(owner, visit.id, position, ["active"]);
+    await sessions.updateProgress(owner, visit.id, position);
     const resourceBefore = await resources.findById(owner, resource.id);
     const ended = await sessions.end(owner, visit.id);
     expect(ended).toMatchObject({ ...position, status: "active", endedAt: expect.any(Date) });
     expect(await sessions.end(owner, visit.id)).toEqual(ended);
     expect(await sessions.findLatestSession(owner, resource.id)).toEqual(ended);
     expect(await resources.findById(owner, resource.id)).toEqual(resourceBefore);
-    expect(await resources.setStatus(owner, resource.id, "finished", ["reading"])).toMatchObject({ lastAccessedAt: resourceBefore!.lastAccessedAt });
+    expect(await resources.setStatus(owner, resource.id, "finished")).toMatchObject({ lastAccessedAt: resourceBefore!.lastAccessedAt });
     expect(await sessions.findById(owner, visit.id)).toEqual(ended);
     expect(await sessions.end(owner, crypto.randomUUID())).toBeNull();
   });
 
-  it.each(["pdf", "position"] as const)("should return null without changing records for an unavailable source or invalid position (%s)", async (kind) => {
+  it.each(["pdf", "position"] as const)("should read and update owned sessions independently of source usability (%s)", async (kind) => {
     const resource = await resources.create(owner, kind === "pdf"
       ? { sourceType: "pdf", title: "PDF placeholder", url: null, sourceDomain: null } : input);
     const [visit] = await db.insert(readerSessions).values({ userId: owner.userId, resourceId: resource.id, pageNumber: 2 }).returning();
     expect(await sessions.open(owner, resource.id, opening)).toBeNull();
-    expect(await sessions.updateProgress(owner, visit!.id, { ...position, pageNumber: 2, scrollOffset: null }, ["active"])).toBeNull();
-    expect(await sessions.setStatus(owner, visit!.id, "paused", active)).toBeNull();
     expect(await sessions.findById(owner, visit!.id)).toEqual(visit);
+    expect((await sessions.recent(owner)).map((row) => row.id)).toContain(visit!.id);
+    const readingPosition = { ...position, pageNumber: 2, scrollOffset: null };
+    expect(await sessions.updateProgress(owner, visit!.id, readingPosition)).toMatchObject(readingPosition);
+    expect(await sessions.setStatus(owner, visit!.id, "failed", "unavailable"))
+      .toMatchObject({ ...readingPosition, status: "failed", failureCode: "unavailable" });
     expect(await resources.findById(owner, resource.id)).toEqual(resource);
   });
 
@@ -195,6 +198,7 @@ describe("ReaderSessionModel", () => {
     const checks = [
       ["initial_progress=101", "reader_session_initial_progress_check"],
       ["progress=101", "reader_session_progress_check"],
+      ["status='paused'", "reader_session_status_check"],
       ["ended_at='2000-01-01T00:00:00Z'", "reader_session_end_check"],
       ["status='completed'", "reader_session_progress_check"],
       ["scroll_offset=1,page_number=1", "reader_session_position_check"],
@@ -206,10 +210,20 @@ describe("ReaderSessionModel", () => {
     }
   });
 
+  it("should propagate database constraint errors when updating a session", async () => {
+    const resource = await createResource();
+    const visit = await open(resource.id);
+    await expect(sessions.updateProgress(owner, visit.id, { ...position, progress: 101 }))
+      .rejects.toMatchObject({ cause: { code: "23514", constraint: "reader_session_progress_check" } });
+    await expect(sessions.setStatus(owner, visit.id, "failed"))
+      .rejects.toMatchObject({ cause: { code: "23514", constraint: "reader_session_failure_check" } });
+    expect(await sessions.findById(owner, visit.id)).toEqual(visit);
+  });
+
   it("should undo all session-opening changes when the transaction fails", async () => {
     const resource = await createResource();
     const first = await open(resource.id);
-    await sessions.updateProgress(owner, first.id, position, ["active"]);
+    await sessions.updateProgress(owner, first.id, position);
     const historyBefore = await db.select().from(readerSessions);
     const resourceBefore = await resources.findById(owner, resource.id);
     failAtStatement = 3;
@@ -223,14 +237,14 @@ describe("ReaderSessionModel", () => {
   it.each([false, true])("should preserve progress and allow only one ongoing session when requests overlap (progress first: %s)", async (progressFirst) => {
     const resource = await createResource();
     const first = await open(resource.id);
-    await sessions.updateProgress(owner, first.id, position, ["active"]);
+    await sessions.updateProgress(owner, first.id, position);
     const opened = await Promise.all([open(resource.id), open(resource.id)]);
     expect(new Set(opened.map((row) => row.id)).size).toBe(2);
     expect(opened.every((row) => row.initialProgress === 45 && row.progress === 45)).toBe(true);
     const previous = (await sessions.findLatestSession(owner, resource.id))!;
     await Promise.all(progressFirst
-      ? [sessions.updateProgress(owner, previous.id, { ...position, progress: 60 }, ["active"]), open(resource.id)]
-      : [open(resource.id), sessions.updateProgress(owner, previous.id, { ...position, progress: 60 }, ["active"])]);
+      ? [sessions.updateProgress(owner, previous.id, { ...position, progress: 60 }), open(resource.id)]
+      : [open(resource.id), sessions.updateProgress(owner, previous.id, { ...position, progress: 60 })]);
     const ended = await sessions.findById(owner, previous.id);
     const latest = await sessions.findLatestSession(owner, resource.id);
     expect(ended?.endedAt).toBeInstanceOf(Date);
