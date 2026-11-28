@@ -4,7 +4,7 @@ import { X } from "lucide-react";
 
 import { policyIntroduction, policySections } from "./privacyPolicyContent";
 
-export default function PrivacyPolicyDialog() {
+export default function PrivacyPolicyDialog({ theme }: { theme: "light" | "dark" }) {
   const closeButton = useRef<HTMLButtonElement>(null);
 
   return (
@@ -12,7 +12,7 @@ export default function PrivacyPolicyDialog() {
       <Dialog.Trigger className="privacy-dialog-trigger">Privacy Policy</Dialog.Trigger>
       <Dialog.Portal>
         <Dialog.Backdrop className="privacy-dialog-backdrop" />
-        <Dialog.Popup className="landing privacy-dialog" initialFocus={closeButton}>
+        <Dialog.Popup className="landing privacy-dialog" data-theme={theme} initialFocus={closeButton}>
           <div className="privacy-dialog-header">
             <Dialog.Title>Privacy Policy</Dialog.Title>
             <Dialog.Close className="privacy-dialog-icon" aria-label="Close privacy policy">

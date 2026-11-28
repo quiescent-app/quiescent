@@ -3,9 +3,13 @@ import { Link, useLocation } from "react-router-dom";
 
 import { policyIntroduction, policySections } from "@/components/custom/privacyPolicyContent";
 import PublicBrand from "@/components/custom/PublicBrand";
+import PublicThemeToggle from "@/components/custom/PublicThemeToggle";
+import { usePublicTheme } from "@/hooks/use-public-theme";
 
 export default function PrivacyPage() {
   const { hash, key, search, state } = useLocation();
+  const { theme, nextTheme, toggleTheme } = usePublicTheme();
+
   useLayoutEffect(() => {
     if (!hash) {
       window.scrollTo(0, 0);
@@ -18,44 +22,33 @@ export default function PrivacyPage() {
   }, [hash, key]);
 
   return (
-    <div className="landing privacy-page">
+    <div className="landing privacy-page" data-theme={theme}>
       <header className="privacy-header">
-        <div className="landing-wrap privacy-header-inner">
-          <PublicBrand />
-        </div>
+        <PublicBrand />
+        <PublicThemeToggle nextTheme={nextTheme} onToggle={toggleTheme} />
       </header>
-      <main className="landing-wrap privacy-content">
-        <header className="privacy-intro">
+      <main className="privacy-content">
+        <header>
           <h1>Privacy Policy</h1>
           {policyIntroduction}
         </header>
-        <div className="privacy-body">
-          <nav className="privacy-toc" aria-label="On this page">
-            <p>On this page</p>
-            <ul>
-              {policySections.map(({ id, title }) => (
-                <li key={id}>
-                  <Link
-                    to={{ search, hash: `#${id}` }}
-                    state={state}
-                    aria-current={hash === `#${id}` ? "location" : undefined}
-                  >
-                    {title}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </nav>
-          <div className="privacy-sections">
-            {policySections.map(({ id, title, content }) => (
-              <section key={id} className="privacy-section">
-                <h2 id={id} tabIndex={-1}>{title}</h2>
-                {content}
-              </section>
-            ))}
-            <Link className="landing-button privacy-signin" to={{ pathname: "/signin", search }} state={state}>Sign in</Link>
-          </div>
-        </div>
+        {policySections.map(({ id, title, content }) => (
+          <section key={id} className="privacy-section">
+            <h2 id={id} tabIndex={-1}>
+              <Link
+                to={{ search, hash: `#${id}` }}
+                state={state}
+                aria-current={hash === `#${id}` ? "location" : undefined}
+              >
+                {title}
+              </Link>
+            </h2>
+            {content}
+          </section>
+        ))}
+        <footer className="privacy-signin">
+          <Link className="landing-button" to={{ pathname: "/signin", search }} state={state}>Sign in</Link>
+        </footer>
       </main>
     </div>
   );

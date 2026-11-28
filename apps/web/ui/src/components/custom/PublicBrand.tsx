@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 
+import PublicLogo from "./PublicLogo";
+
 export default function PublicBrand() {
   return (
     <Link className="landing-brand public-brand" to="/" aria-label="Quiescent home">
-      <img src="/quiescent-logo.png" width="34" height="34" alt="" />
+      <PublicLogo size={34} />
       <span>Quiescent</span>
     </Link>
   );
