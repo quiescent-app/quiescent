@@ -31,7 +31,7 @@ describe("ReaderSessionModel", () => {
   const resources = new ReaderResourceModel();
   const sessions = new ReaderSessionModel();
   const input = { sourceType: "url", url: "https://example.com/article", sourceDomain: "example.com", title: "Article" } as const;
-  const position = { progress: 45, scrollOffset: 2400, pageNumber: null, navigationState: "history" } as const;
+  const position = { progress: 45, scrollOffset: 2400, pageNumber: null } as const;
   const opening = { from: "not_started", to: "reading" } as const;
   const active = { allowedPredecessors: ["active"], requireUsableSource: true } as const;
   const createResource = () => resources.create(owner, input);
@@ -81,10 +81,10 @@ describe("ReaderSessionModel", () => {
     const before = await resources.findById(owner, resource.id);
     const allowed = mode === "matching" ? ["active"] as const : mode === "nonmatching" ? ["failed"] as const : [];
     const progress = await sessions.updateProgress(owner, visit.id, position, allowed);
-    const changed = await sessions.setStatus(owner, visit.id, "paused", { ...active, allowedPredecessors: allowed });
+    const changed = await sessions.setStatus(owner, visit.id, "failed", { ...active, allowedPredecessors: allowed }, "unavailable");
     if (mode === "matching") {
       expect(progress).toMatchObject(position);
-      expect(changed).toMatchObject({ ...position, status: "paused" });
+      expect(changed).toMatchObject({ ...position, status: "failed", failureCode: "unavailable" });
     } else {
       expect([progress, changed]).toEqual([null, null]);
       expect(await sessions.findById(owner, visit.id)).toEqual(visit);
@@ -100,7 +100,7 @@ describe("ReaderSessionModel", () => {
     expect(await sessions.findLatestSession(other, resource.id)).toBeNull();
     expect(await sessions.recent(other)).toEqual([]);
     expect(await sessions.updateProgress(other, visit.id, position, ["active"])).toBeNull();
-    expect(await sessions.setStatus(other, visit.id, "paused", active)).toBeNull();
+    expect(await sessions.setStatus(other, visit.id, "failed", active, "unavailable")).toBeNull();
     expect(await sessions.end(other, visit.id)).toBeNull();
     expect(await sessions.findById(owner, visit.id)).toEqual(visit);
   });
@@ -110,7 +110,7 @@ describe("ReaderSessionModel", () => {
     expect(await sessions.findLatestSession(owner, resource.id)).toBeNull();
     const visit = await open(resource.id);
     expect(visit).toMatchObject({ userId: owner.userId, resourceId: resource.id, initialProgress: 0, progress: 0,
-      navigationState: "resource", scrollOffset: null, pageNumber: null, status: "active", failureCode: null, endedAt: null });
+      scrollOffset: null, pageNumber: null, status: "active", failureCode: null, endedAt: null });
     expect(visit.updatedAt).toEqual(visit.createdAt);
     expect(await resources.findById(owner, resource.id)).toMatchObject({ status: "reading", lastAccessedAt: visit.createdAt });
     const exact = await client.query("SELECT r.last_accessed_at = s.created_at AS synchronized FROM reader_resources r JOIN reader_sessions s ON s.resource_id=r.id WHERE s.id=$1", [visit.id]);
@@ -132,7 +132,7 @@ describe("ReaderSessionModel", () => {
     const history = await sessions.findById(owner, first.id);
     expect(history).toMatchObject({ ...position, ...reading, initialProgress: 0, createdAt: first.createdAt, endedAt: expect.any(Date) });
     expect(await sessions.updateProgress(owner, first.id, position, [reading.status])).toBeNull();
-    expect(await sessions.setStatus(owner, first.id, "paused", { ...active, allowedPredecessors: [reading.status] })).toBeNull();
+    expect(await sessions.setStatus(owner, first.id, "failed", { ...active, allowedPredecessors: [reading.status] }, "unavailable")).toBeNull();
     expect(await sessions.findById(owner, first.id)).toEqual(history);
     expect(await sessions.findLatestSession(owner, resource.id)).toEqual(second);
     expect((await resources.findById(owner, resource.id))?.status).toBe("finished");
@@ -173,7 +173,7 @@ describe("ReaderSessionModel", () => {
     const [visit] = await db.insert(readerSessions).values({ userId: owner.userId, resourceId: resource.id, pageNumber: 2 }).returning();
     expect(await sessions.open(owner, resource.id, opening)).toBeNull();
     expect(await sessions.updateProgress(owner, visit!.id, { ...position, pageNumber: 2, scrollOffset: null }, ["active"])).toBeNull();
-    expect(await sessions.setStatus(owner, visit!.id, "paused", active)).toBeNull();
+    expect(await sessions.setStatus(owner, visit!.id, "failed", active, "unavailable")).toBeNull();
     expect(await sessions.findById(owner, visit!.id)).toEqual(visit);
     expect(await resources.findById(owner, resource.id)).toEqual(resource);
   });
@@ -195,6 +195,7 @@ describe("ReaderSessionModel", () => {
     const checks = [
       ["initial_progress=101", "reader_session_initial_progress_check"],
       ["progress=101", "reader_session_progress_check"],
+      ["status='paused'", "reader_session_status_check"],
       ["ended_at='2000-01-01T00:00:00Z'", "reader_session_end_check"],
       ["status='completed'", "reader_session_progress_check"],
       ["scroll_offset=1,page_number=1", "reader_session_position_check"],

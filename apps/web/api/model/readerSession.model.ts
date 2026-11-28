@@ -5,7 +5,7 @@ import { readerResources, type ReaderResource } from "../schema/readerResource.s
 import { readerSessions, type ReaderSession } from "../schema/readerSession.schema.js";
 import type { ReaderOwner } from "./readerResource.model.js";
 
-export type ReaderProgressInput = Pick<ReaderSession, "progress" | "navigationState" | "scrollOffset" | "pageNumber">;
+export type ReaderProgressInput = Pick<ReaderSession, "progress" | "scrollOffset" | "pageNumber">;
 export type ReaderSessionStatusConditions = {
   allowedPredecessors: readonly ReaderSession["status"][];
   requireUsableSource: boolean;
@@ -57,11 +57,11 @@ export class ReaderSessionModel {
           exists(database.select({ id: readerResources.id }).from(readerResources).where(readable)))),
       database.execute(sql`WITH visit AS MATERIALIZED (SELECT clock_timestamp() AS opened_at)
         INSERT INTO ${readerSessions}
-          (id, user_id, resource_id, initial_progress, progress, navigation_state,
+          (id, user_id, resource_id, initial_progress, progress,
            scroll_offset, page_number, status, failure_code, created_at, updated_at)
         SELECT ${id}::uuid, ${readerResources.userId}, ${readerResources.id},
           COALESCE(previous.progress, 0), COALESCE(previous.progress, 0),
-          COALESCE(previous.navigation_state, 'resource'), previous.scroll_offset, previous.page_number,
+          previous.scroll_offset, previous.page_number,
           COALESCE(previous.status, 'active'), previous.failure_code,
           visit.opened_at, visit.opened_at
         FROM ${readerResources} CROSS JOIN visit
@@ -107,7 +107,7 @@ export class ReaderSessionModel {
     allowedStatuses: readonly ReaderSession["status"][],
   ): Promise<ReaderSession | null> {
     const [updated] = await database.update(readerSessions).set({
-      progress: input.progress, navigationState: input.navigationState,
+      progress: input.progress,
       scrollOffset: input.scrollOffset, pageNumber: input.pageNumber,
       updatedAt: sql`clock_timestamp()`,
     }).where(and(
