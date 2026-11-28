@@ -4,6 +4,7 @@ import ProtectedRoute from "@/auth/ProtectedRoute";
 import GuestRoute from "@/auth/GuestRoute";
 import AppLayout from "@/layout";
 
+import PrivacyPage from "./pages/PrivacyPage";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import LibraryPage from "@/pages/LibraryPage";
@@ -13,6 +14,7 @@ export default function App() {
   return (
     <Routes>
       {/* Public routes */}
+      <Route path="/privacy" element={<PrivacyPage/>} />
       <Route element={<GuestRoute />}>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/signup" element={<SignupPage />} />

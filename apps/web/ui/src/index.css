@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/open-sans";
+@import "@fontsource/cormorant-garamond/600.css";
+@import "@fontsource/cormorant-garamond/700.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -280,4 +283,600 @@ body {
   .auth-panel {
     padding: 26px 22px;
   }
+}
+
+/* Shared light/dark palette. Add .q-theme (plus .dark from useAppearance) to a page's root element.
+   It's scoped to opted-in pages because the rest of the app has no dark colors yet. */
+.q-theme {
+  --q-ground: #eef3f2;
+  --q-surface: #ffffff;
+  --q-text: #30405a;
+  --q-ink: #1a2c4a;
+  --q-harbor: #2f5f94;
+  --q-hl: #f5e7b0;
+  --q-later: #5e4f94;
+  --q-later-bg: #eeeaf7;
+  --q-on-ink: #ffffff;
+  --q-rule: color-mix(in srgb, var(--q-ink) 20%, var(--q-surface));
+  --q-field-rule: color-mix(in srgb, var(--q-ink) 63%, var(--q-surface));
+  --q-muted: color-mix(in srgb, var(--q-text) 85%, var(--q-surface));
+  --q-hover: color-mix(in srgb, var(--q-harbor) 12%, var(--q-surface));
+  --q-sidebar: color-mix(in srgb, var(--q-ink) 8%, var(--q-ground));
+  --q-ink-dark: color-mix(in srgb, var(--q-ink) 86%, var(--q-harbor));
+
+  color-scheme: light;
+}
+
+.q-theme.dark {
+  --q-ground: #0e1424;
+  --q-surface: #162036;
+  --q-text: #bac1cd;
+  --q-ink: #a9bce0;
+  --q-harbor: #8fb3e0;
+  --q-hl: #4a4019;
+  --q-later: #c0adeb;
+  --q-later-bg: #352b47;
+  --q-on-ink: #0e1424;
+
+  color-scheme: dark;
+}
+
+.q-theme-toggle {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid var(--q-rule);
+  border-radius: 0.65rem;
+  background: var(--q-surface);
+  color: var(--q-ink);
+  cursor: pointer;
+}
+
+.q-theme-toggle:hover {
+  background: var(--q-hover);
+  color: var(--q-harbor);
+}
+
+.privacy-shell {
+  min-height: 100vh;
+  padding: 40px 20px 56px;
+  background: var(--q-ground);
+  color: var(--q-ink);
+}
+
+.privacy-shell .auth-brand {
+  margin-bottom: 28px;
+  color: var(--q-ink);
+  font-family: "Cormorant Garamond", Garamond, Georgia, serif;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.privacy-panel {
+  width: min(100%, 600px);
+  margin: 0 auto;
+  padding: 32px 32px 28px;
+  border: 1px solid var(--q-rule);
+  border-radius: 12px;
+  background: var(--q-surface);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.privacy-panel h1,
+.privacy-panel h2 {
+  color: var(--q-ink);
+  font-family: "Cormorant Garamond", Garamond, Georgia, serif;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.privacy-panel h1 {
+  margin: 0 0 4px;
+  font-size: 26px;
+}
+
+.privacy-updated {
+  margin: 0 0 20px;
+  color: var(--q-muted);
+  font-size: 11px;
+}
+
+.privacy-section {
+  margin-top: 26px;
+}
+
+.privacy-section h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.privacy-section p {
+  margin: 0;
+}
+
+.privacy-section ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  list-style: disc;
+}
+
+.privacy-section li + li {
+  margin-top: 8px;
+}
+
+.privacy-section li::marker {
+  color: var(--q-ink);
+}
+
+.privacy-panel strong {
+  color: var(--q-ink);
+  font-weight: 700;
+}
+
+.privacy-panel a {
+  color: var(--q-ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.privacy-panel a:hover {
+  color: var(--q-harbor);
+}
+
+.privacy-divider {
+  margin: 28px 0 20px;
+  border: 0;
+  border-top: 1px solid var(--q-rule);
+}
+
+.privacy-signin {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--q-ink);
+  color: var(--q-on-ink);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.privacy-signin:hover {
+  background: var(--q-ink-dark);
+}
+
+.privacy-signin:focus-visible {
+  outline: 3px solid var(--q-ink);
+  outline-offset: 3px;
+}
+
+.privacy-back {
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+@media (max-width: 480px) {
+  .privacy-shell {
+    padding: 24px 16px 40px;
+  }
+
+  .privacy-panel {
+    padding: 24px 20px;
+  }
+
+  
+}
+
+/* Sign-in page */
+.signin-page {
+  min-height: 100svh;
+  background: var(--q-ground);
+  color: var(--q-ink);
+  font-family: "Open Sans Variable", "Open Sans", ui-sans-serif, system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.signin-page :focus-visible {
+  outline: 2px solid var(--q-ink);
+  outline-offset: 3px;
+}
+
+.signin-nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.65rem, 3vw, 1.5rem);
+  min-height: 4rem;
+  padding: 0.65rem clamp(1rem, 5vw, 4rem);
+  border-bottom: 1px solid var(--q-rule);
+  background: var(--q-surface);
+}
+
+.signin-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--q-ink);
+  cursor: pointer;
+  font-family: "Cormorant Garamond", Garamond, Georgia, serif;
+  font-size: 1.875rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 2.25rem;
+}
+
+.signin-home-mark {
+  display: block;
+  flex: none;
+  width: 34px;
+  height: 34px;
+}
+
+.signin-back {
+  margin-left: auto;
+  color: var(--q-harbor);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.signin-back:hover {
+  text-decoration: underline;
+}
+
+.signin-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 48fr) minmax(0, 52fr);
+  min-height: calc(100svh - 4rem);
+  background: var(--q-surface);
+}
+
+.signin-intro {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: clamp(2rem, 5vw, 5rem);
+  border-right: 1px solid var(--q-rule);
+  background: var(--q-sidebar);
+}
+
+.signin-intro-content {
+  width: min(100%, 31rem);
+  margin-inline: auto;
+}
+
+.signin-intro-title {
+  max-width: 11ch;
+  margin: 0;
+  color: var(--q-ink);
+  font: 600 clamp(3rem, 5vw, 5.25rem) / 0.97 "Cormorant Garamond", Garamond, Georgia, serif;
+  letter-spacing: -0.035em;
+}
+
+.signin-intro-text {
+  max-width: 38ch;
+  margin: 1rem 0 0;
+  color: var(--q-text);
+  line-height: 1.6;
+}
+
+.signin-preview {
+  position: relative;
+  margin-top: clamp(1.6rem, 4vh, 3rem);
+  border: 1px solid var(--q-rule);
+  border-radius: 0.85rem;
+  background: var(--q-surface);
+}
+
+.signin-preview-header,
+.signin-preview-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem clamp(1rem, 2vw, 1.5rem);
+  color: var(--q-text);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.signin-preview-header {
+  border-bottom: 1px solid var(--q-rule);
+}
+
+.signin-preview-footer {
+  border-top: 1px solid var(--q-rule);
+}
+
+.signin-preview-body {
+  padding: clamp(1rem, 3vw, 2rem);
+}
+
+.signin-preview-body h3 {
+  margin: 0;
+  color: var(--q-ink);
+  font: 600 clamp(1.65rem, 3vw, 2.35rem) / 1.04 "Cormorant Garamond", Garamond, Georgia, serif;
+}
+
+.signin-preview-body p {
+  margin: 0.8rem 0 0;
+  color: var(--q-text);
+  line-height: 1.6;
+}
+
+.signin-preview-body mark {
+  padding: 0.12em 0.2em;
+  background: var(--q-hl);
+  color: var(--q-ink);
+}
+
+.signin-preview-progress {
+  flex: 1;
+  min-width: 2rem;
+}
+
+.signin-preview-progress [data-slot="progress-track"] {
+  height: 0.4rem;
+  border-radius: 1rem;
+  background: var(--q-rule);
+}
+
+.signin-preview-progress [data-slot="progress-indicator"] {
+  background: var(--q-harbor);
+}
+
+.signin-preview-percent {
+  font-variant-numeric: tabular-nums;
+}
+
+.signin-preview-saved {
+  position: absolute;
+  right: 0.65rem;
+  bottom: -0.9rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--q-rule);
+  border-radius: 0.6rem;
+  background: var(--q-later-bg);
+  color: var(--q-later);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.signin-panel {
+  display: grid;
+  place-items: center;
+  padding: clamp(2rem, 5vw, 5rem);
+}
+
+.signin-card {
+  width: min(100%, 27rem);
+}
+
+.signin-card h1 {
+  margin: 0 0 0.35rem;
+  color: var(--q-ink);
+  font: 700 clamp(2.5rem, 4.25vw, 3.65rem) / 1.05 "Cormorant Garamond", Garamond, Georgia, serif;
+  letter-spacing: -0.03em;
+}
+
+.signin-lead {
+  margin: 0 0 1.5rem;
+  color: var(--q-text);
+  line-height: 1.55;
+}
+
+.signin-agree {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.3rem;
+  padding: 0.35rem 0;
+}
+
+.signin-agree input {
+  flex: none;
+  width: 1.1rem;
+  height: 1.1rem;
+  margin: 0.2rem 0 0;
+  accent-color: var(--q-ink);
+  cursor: pointer;
+}
+
+.signin-agree label {
+  cursor: pointer;
+}
+
+.signin-agree a {
+  color: var(--q-harbor);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.signin-hint {
+  margin: 0 0 0.75rem;
+  color: var(--q-text);
+  font-size: 0.875rem;
+}
+
+.signin-action {
+  width: 100%;
+  height: auto;
+  min-height: 3rem;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+}
+
+.signin-google {
+  background: var(--q-ink);
+  color: var(--q-on-ink);
+}
+
+.signin-google:hover {
+  background: var(--q-ink-dark);
+}
+
+.signin-send {
+  border-color: var(--q-rule);
+  background: var(--q-surface);
+  color: var(--q-ink);
+}
+
+.signin-send:hover {
+  border-color: var(--q-muted);
+  background: var(--q-surface);
+  color: var(--q-ink);
+}
+
+/* Keep pointer events on so the not-allowed cursor shows until the policy is accepted */
+.signin-action:disabled {
+  pointer-events: auto;
+  border-color: var(--q-rule);
+  background: var(--q-sidebar);
+  color: var(--q-text);
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.signin-google,
+.signin-google:disabled {
+  border-color: transparent;
+}
+
+.signin-google-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.55rem;
+  height: 1.55rem;
+  overflow: hidden;
+  border-radius: 50%;
+  background: #fff;
+}
+
+/* Google.png has wide empty margins, so draw it at 2x and let the circle clip it */
+.signin-google-icon img {
+  width: 3.1rem;
+  max-width: none;
+  height: 3.1rem;
+  margin: -0.775rem;
+}
+
+.signin-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin: 1.15rem 0;
+  color: var(--q-text);
+  font-size: 0.875rem;
+}
+
+.signin-divider [data-slot="separator"] {
+  background: var(--q-rule);
+}
+
+.signin-form {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.signin-form label {
+  color: var(--q-ink);
+  font-weight: 600;
+}
+
+.signin-form input {
+  height: 3rem;
+  padding: 0.5rem 0.75rem;
+  border-color: var(--q-field-rule);
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, var(--q-surface) 70%, transparent);
+  color: var(--q-ink);
+  font-size: 1rem;
+}
+
+.signin-form input::placeholder {
+  color: var(--q-muted);
+}
+
+.signin-form input:focus-visible {
+  border-color: var(--q-ink);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--q-ink) 15%, transparent);
+}
+
+.signin-form .signin-action {
+  margin-top: 0.25rem;
+}
+
+@media (max-width: 740px) {
+  .signin-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .signin-intro {
+    display: none;
+  }
+
+  .signin-panel {
+    place-items: start center;
+    padding: 2rem 1.25rem 3rem;
+  }
+}
+
+.signin-collects {
+  padding: 16px 18px;
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--library-accent) 55%, var(--card));
+  line-height: 1.55;
+}
+
+.signin-collects p {
+  margin: 0;
+}
+
+.signin-details {
+  border-radius: 10px;
+  background: color-mix(in oklab, var(--library-accent) 55%, var(--card));
+}
+
+.signin-details > summary {
+  padding: 16px 18px;
+  border-radius: 10px;
+  color: var(--library-foreground);
+  cursor: pointer;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.signin-details > summary:focus-visible {
+  outline: 2px solid var(--library-foreground);
+  outline-offset: 2px;
+}
+
+.signin-details .signin-collects {
+  padding-top: 0;
+  background: transparent;
+}
+
+.signin-collects p:last-child {
+  margin-top: 10px;
+  color: var(--library-muted-foreground);
+}
+
+.signin-collects ul {
+  margin: 6px 0 0;
+  padding-left: 22px;
+  color: var(--library-muted-foreground);
+  list-style: disc;
+}
+
+.signin-collects li::marker {
+  color: var(--library-foreground);
 }
