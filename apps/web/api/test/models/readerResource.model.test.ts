@@ -62,24 +62,21 @@ describe("ReaderResourceModel", () => {
     expect((await resources.list(owner, status)).map((row) => row.id)).toEqual([rows[1]!.id, rows[0]!.id, rows[3]!.id, rows[2]!.id]);
   });
 
-  it.each(["matching", "nonmatching", "empty"] as const)("should update status only when the supplied conditions match (%s)", async (mode) => {
+  it("should save resource status and modification time without changing access time", async () => {
     const resource = await createResource();
-    const allowed = mode === "matching" ? ["not_started"] as const : mode === "nonmatching" ? ["finished"] as const : [];
-    const changed = await resources.setStatus(owner, resource.id, "finished", allowed);
-    if (mode === "matching") {
-      expect(changed).toMatchObject({ status: "finished", lastAccessedAt: resource.lastAccessedAt });
-      expect(await resources.findById(owner, resource.id)).toEqual(changed);
-    } else {
-      expect(changed).toBeNull();
-      expect(await resources.findById(owner, resource.id)).toEqual(resource);
-    }
+    const changed = await resources.setStatus(owner, resource.id, "finished");
+    expect(changed).toMatchObject({ status: "finished", lastAccessedAt: resource.lastAccessedAt });
+    expect(changed!.updatedAt.getTime()).toBeGreaterThanOrEqual(resource.updatedAt.getTime());
+    expect(await resources.findById(owner, resource.id)).toEqual(changed);
+    expect(await resources.setStatus(owner, resource.id, "reading")).toMatchObject({ status: "reading" });
+    expect(await resources.setStatus(owner, crypto.randomUUID(), "finished")).toBeNull();
   });
 
   it("should prevent reading or changing another user's records", async () => {
     const resource = await createResource();
     expect(await resources.findById(other, resource.id)).toBeNull();
     expect(await resources.list(other, "not_started")).toEqual([]);
-    expect(await resources.setStatus(other, resource.id, "finished", ["not_started"])).toBeNull();
+    expect(await resources.setStatus(other, resource.id, "finished")).toBeNull();
     expect(await resources.delete(other, resource.id)).toBe(false);
     expect(await resources.findById(owner, resource.id)).toEqual(resource);
   });
